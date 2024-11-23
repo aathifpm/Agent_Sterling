@@ -2,29 +2,63 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from src.features.research_agent import ResearchAgent
 from src.features.sentiment_analyzer import SentimentAnalyzer
-from src.agent.llm_handler import GeminiHandler
+from src.features.thread_generator import ThreadGenerator
+from src.agent.base import TwitterAIAgent
 from src.config.gemini_config import GeminiConfig
 import os
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
+
+# Verify required environment variables
+required_vars = [
+    'GEMINI_API_KEY',
+    'TWITTER_API_KEY',
+    'TWITTER_API_SECRET',
+    'TWITTER_ACCESS_TOKEN',
+    'TWITTER_ACCESS_TOKEN_SECRET',
+    'TWITTER_BEARER_TOKEN'
+]
+
+missing_vars = [var for var in required_vars if not os.getenv(var)]
+if missing_vars:
+    raise ValueError(f"Missing required environment variables: {', '.join(missing_vars)}")
 
 app = FastAPI()
 
+# Initialize configurations
+gemini_config = GeminiConfig(os.getenv("GEMINI_API_KEY"))
+credentials = {
+    'bearer_token': os.getenv('TWITTER_BEARER_TOKEN'),
+    'api_key': os.getenv('TWITTER_API_KEY'),
+    'api_secret': os.getenv('TWITTER_API_SECRET'),
+    'access_token': os.getenv('TWITTER_ACCESS_TOKEN'),
+    'access_secret': os.getenv('TWITTER_ACCESS_TOKEN_SECRET')
+}
+
+# Initialize agent
+agent = TwitterAIAgent(credentials)
+
 class TweetRequest(BaseModel):
     text: str
-    type: str  # research, sentiment, context, etc.
+    type: str
 
 @app.post("/analyze")
 async def analyze_tweet(request: TweetRequest):
     try:
-        gemini_config = GeminiConfig(os.getenv("GEMINI_API_KEY"))
-        gemini_handler = GeminiHandler(gemini_config)
-        
         if request.type == "research":
-            agent = ResearchAgent(gemini_handler)
-            return await agent.research_topic(request.text)
+            research_agent = ResearchAgent(gemini_config)
+            return research_agent.research_topic(request.text)
         elif request.type == "sentiment":
-            analyzer = SentimentAnalyzer(gemini_handler)
-            return await analyzer.analyze_sentiment(request.text)
-        # Add more handlers as needed
-        
+            sentiment_analyzer = SentimentAnalyzer(gemini_config)
+            return sentiment_analyzer.analyze_sentiment(request.text)
+        elif request.type == "thread":
+            thread_generator = ThreadGenerator(gemini_config)
+            return thread_generator.generate_thread(request.text)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/health")
+def health_check():
+    return {"status": "healthy"}

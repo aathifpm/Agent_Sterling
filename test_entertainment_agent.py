@@ -24,7 +24,7 @@ async def test_entertainment_replies():
     stream = TweetStreamListener(credentials['bearer_token'], agent)
     
     # Add rule to track mentions of your bot
-    stream.add_rules(tweepy.StreamRule("@your_bot_handle"))
+    stream.add_rules(tweepy.StreamRule("@"))
     
     # Start streaming
     print("Starting stream listener...")
