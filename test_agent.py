@@ -70,6 +70,22 @@ def run_tests():
         print(sentiment_result)
         print("\n=================\n")
 
+async def run_full_test():
+    agent = TwitterAIAgent()
+    intent_classifier = IntentClassifier(agent.model)
+    context_bridge = ContextBridge(agent.client)
+    
+    test_tweet = "What's the latest research on AI safety? #AI #AGI"
+    
+    # Classify intent
+    intent = await intent_classifier.classify_intent(test_tweet)
+    print(f"Detected Intent: {intent}")
+    
+    # Route to appropriate handler
+    router = IntentRouter(agent.model)
+    result = await router.route(intent, test_tweet)
+    print(f"Handler Result: {result}")
+
 if __name__ == "__main__":
     # Create .env file if it doesn't exist
     if not os.path.exists('.env'):
