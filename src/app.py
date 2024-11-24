@@ -5,6 +5,8 @@ from src.features.sentiment_analyzer import SentimentAnalyzer
 from src.features.thread_generator import ThreadGenerator
 from src.agent.base import TwitterAIAgent
 from src.config.gemini_config import GeminiConfig
+from src.platforms.factory import PlatformFactory
+from typing import Dict
 import os
 from dotenv import load_dotenv
 
@@ -44,6 +46,10 @@ class TweetRequest(BaseModel):
     text: str
     type: str
 
+class PlatformConfig(BaseModel):
+    platform_type: str
+    credentials: Dict
+
 @app.post("/analyze")
 async def analyze_tweet(request: TweetRequest):
     try:
@@ -62,3 +68,14 @@ async def analyze_tweet(request: TweetRequest):
 @app.get("/health")
 def health_check():
     return {"status": "healthy"}
+
+@app.post("/platform/initialize")
+async def initialize_platform(config: PlatformConfig):
+    try:
+        platform = PlatformFactory.create_platform(
+            config.platform_type,
+            config.credentials
+        )
+        return {"status": "success", "platform": config.platform_type}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

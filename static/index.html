@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Control panel for Agent Sterling Twitter Bot">
+    <title>Agent Sterling Control Panel</title>
+    <link rel="icon" type="image/x-icon" href="/static/sterling.jpg">
+    <link rel="stylesheet" href="/static/styles.css">
+    <meta name="csrf-token" content="{{ csrf_token }}">
+</head>
+<body>
+    <div class="container">
+        <h1>🤖 Agent Sterling Control Panel</h1>
+        
+        <div class="section">
+            <h2>Monitoring Settings</h2>
+            <div class="control-group">
+                <label for="accountToWatch">Account to Watch:</label>
+                <input type="text" id="accountToWatch" placeholder="@username">
+            </div>
+            <div class="control-group">
+                <label for="checkInterval">Check Interval (seconds):</label>
+                <input type="number" id="checkInterval" min="30" value="60">
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>Response Settings</h2>
+            <div class="control-group">
+                <label for="responseType">Response Type:</label>
+                <select id="responseType">
+                    <option value="entertainment">Entertainment</option>
+                    <option value="research">Research</option>
+                    <option value="sentiment">Sentiment Analysis</option>
+                </select>
+            </div>
+            <div class="control-group">
+                <label for="useEmojis">Use Emojis:</label>
+                <input type="checkbox" id="useEmojis" checked>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>Rate Limits</h2>
+            <div class="control-group">
+                <label for="maxTweetsPerHour">Max Tweets Per Hour:</label>
+                <input type="number" id="maxTweetsPerHour" min="1" max="50" value="10">
+            </div>
+            <div class="control-group">
+                <label for="cooldownPeriod">Cooldown Period (minutes):</label>
+                <input type="number" id="cooldownPeriod" min="1" value="5">
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>Content Filters</h2>
+            <div class="control-group">
+                <label for="keywords">Keywords to Watch (comma-separated):</label>
+                <input type="text" id="keywords" placeholder="AI, machine learning, tech">
+            </div>
+            <div class="control-group">
+                <label for="blacklist">Blacklisted Words (comma-separated):</label>
+                <input type="text" id="blacklist" placeholder="spam, nsfw">
+            </div>
+        </div>
+
+        <div class="actions">
+            <button id="startBtn" class="primary">Start Agent</button>
+            <button id="stopBtn" class="secondary" disabled>Stop Agent</button>
+            <button id="saveConfig" class="secondary">Save Configuration</button>
+        </div>
+
+        <div class="status">
+            <h3>Status</h3>
+            <div id="statusLog" class="log"></div>
+        </div>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html> 
