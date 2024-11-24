@@ -1,20 +1,32 @@
 # Agent_Sterling 🤖
 
-An intelligent Twitter bot that watches accounts and mentions, providing AI-powered responses using Gemini Pro.
+An intelligent social media bot that interacts with Twitter and Mastodon, providing AI-powered responses using Google's Gemini Pro.
 
 ## Features 🌟
 
-- **Account Monitoring**: Watch specific Twitter accounts for new tweets
-- **Mention Tracking**: Automatically respond to mentions of your account
-- **AI-Powered Responses**: Generate contextual and entertaining replies using Google's Gemini Pro
-- **Smart Engagement**: Analyze tweet sentiment and context before responding
-- **Rate Limiting**: Built-in handling of Twitter API rate limits
+### Multi-Platform Support
+- **Twitter Integration**: Full Twitter API support
+- **Mastodon Integration**: Federated social network support
+- **Platform-Specific Handling**: Optimized for each platform's unique features
+
+### Core Functionality
+- **Account Monitoring**: Watch specific accounts for new posts
+- **Mention Tracking**: Automatically respond to mentions
+- **Hashtag Interaction**: Engage with trending topics and hashtags
+- **AI-Powered Responses**: Generate contextual and entertaining replies
+- **Smart Engagement**: Analyze post sentiment and context
+
+### Technical Features
+- **Rate Limiting**: Built-in handling of API rate limits
 - **Error Recovery**: Robust error handling and automatic recovery
+- **NLTK Integration**: Natural language processing for better understanding
+- **Gemini Pro**: Advanced AI response generation
 
 ## Prerequisites 📋
 
 - Python 3.8+
 - Twitter API credentials (Elevated access)
+- Mastodon account and API access
 - Google Gemini API key
 
 ## Installation 🔧

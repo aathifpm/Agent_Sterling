@@ -19,7 +19,7 @@ async def test_mastodon_interactions():
         platform = MastodonPlatform(credentials)
 
         # Test hashtag interaction
-        hashtag = "AI"
+        hashtag = "media"
         print(f"\nSearching posts with #{hashtag}...")
         hashtag_posts = await platform.search_hashtag(hashtag, limit=5)
         print(f"Found {len(hashtag_posts)} posts with #{hashtag}")
@@ -31,6 +31,9 @@ async def test_mastodon_interactions():
             
             print("\nAI Generated Response:")
             print(post['ai_response'])
+            
+            # Add delay between interactions
+            await asyncio.sleep(2)
             
             # Interact with the post
             print("\nInteracting with post...")
@@ -47,10 +50,9 @@ async def test_mastodon_interactions():
 
         # Test mention handling
         print("\nChecking recent mentions...")
-        mentions = await platform.get_mentions(limit=3)
+        mentions = await platform.get_mentions(limit=1)
         
         if mentions:
-            print(f"\nFound {len(mentions)} recent mentions")
             for item in mentions:
                 if "error" in item:
                     continue
@@ -58,7 +60,8 @@ async def test_mastodon_interactions():
                 mention = item['mention']
                 response = item['response']
                 
-                print(f"\nMention from @{mention['author']}:")
+                print(f"\n=== New Mention ===")
+                print(f"From: @{mention['author']}")
                 print(f"Content: {mention['content']}")
                 
                 if response.get('status') == 'success':

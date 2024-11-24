@@ -7,6 +7,8 @@ import google.generativeai as genai
 import os
 from dotenv import load_dotenv
 import re
+import time
+import asyncio
 
 # Download required NLTK data
 nltk.download('punkt')
@@ -25,59 +27,71 @@ class MastodonPlatform:
         load_dotenv()
         genai.configure(api_key=os.getenv('GEMINI_API_KEY'))
         self.model = genai.GenerativeModel('gemini-1.5-pro')
+        
+        # Rate limiting settings
+        self.last_request_time = 0
+        self.request_count = 0
+        self.max_requests_per_minute = 1000  # Adjust based on your API limits
+        self.retry_delay = 2  # seconds between retries
 
     def _clean_html(self, text: str) -> str:
         """Remove HTML tags and clean up text"""
-        # Remove HTML tags
         clean_text = re.sub(r'<[^>]+>', '', text)
-        # Remove URLs
         clean_text = re.sub(r'http\S+|www.\S+', '', clean_text)
-        # Remove multiple spaces and newlines
         clean_text = ' '.join(clean_text.split())
         return clean_text
 
-    async def generate_entertainment_response(self, post_text: str) -> str:
-        """Generate a short, fun response using Gemini"""
-        # Clean the post text first
+    async def _handle_rate_limit(self):
+        """Handle API rate limiting"""
+        current_time = time.time()
+        time_diff = current_time - self.last_request_time
+        
+        # Reset counter after a minute
+        if time_diff >= 60:
+            self.request_count = 0
+            self.last_request_time = current_time
+        
+        # If we're at the limit, wait
+        if self.request_count >= self.max_requests_per_minute:
+            wait_time = 60 - time_diff
+            if wait_time > 0:
+                print(f"Rate limit reached, waiting {wait_time:.1f} seconds...")
+                await asyncio.sleep(wait_time)
+                self.request_count = 0
+                self.last_request_time = time.time()
+        
+        self.request_count += 1
+
+    async def generate_entertainment_response(self, post_text: str, max_retries=3) -> str:
+        """Generate a short, fun response with retry logic"""
         clean_text = self._clean_html(post_text)
         
         prompt = f"""
-        Create a fun, short response to this post: "{clean_text}"
-        
+        Create a fun, short response to: "{clean_text}"
         Rules:
         - Maximum 2 sentences
         - Include 1-2 emojis
         - Be witty and friendly
         - Match the post's tone
-        - Add a relevant pop culture reference if it fits naturally
         
-        Format: Just the response text with emojis, no labels or sections.
+        Format: Just the response text with emojis.
         """
         
-        try:
-            response = self.model.generate_content(prompt)
-            return response.text[:240].strip()  # Ensure length limit
-        except Exception as e:
-            return f"🤖 Having a moment... {str(e)[:100]}"
+        for attempt in range(max_retries):
+            try:
+                await self._handle_rate_limit()
+                response = self.model.generate_content(prompt)
+                return response.text[:240].strip()
+            except Exception as e:
+                if attempt < max_retries - 1:
+                    wait_time = self.retry_delay * (attempt + 1)
+                    print(f"Retry {attempt + 1}/{max_retries} after {wait_time}s...")
+                    await asyncio.sleep(wait_time)
+                else:
+                    return f"🤖 Having a moment... Will be back soon! ✨"
 
-    async def analyze_post_sentiment(self, post_text: str) -> Dict:
-        """Quick sentiment analysis"""
-        clean_text = self._clean_html(post_text)
-        prompt = f"""
-        Analyze: "{clean_text}"
-        Return only:
-        TONE: [one word]
-        TOPIC: [one phrase]
-        """
-        
-        try:
-            response = self.model.generate_content(prompt)
-            return {"analysis": response.text.strip()}
-        except Exception as e:
-            return {"error": str(e)}
-
-    async def search_hashtag(self, hashtag: str, limit: int = 20) -> List[Dict]:
-        """Search and respond to hashtag posts"""
+    async def search_hashtag(self, hashtag: str, limit: int = 5) -> List[Dict]:
+        """Search and respond to hashtag posts with rate limiting"""
         try:
             hashtag = hashtag.strip('#')
             results = self.client.timeline_hashtag(hashtag, limit=limit)
@@ -85,6 +99,8 @@ class MastodonPlatform:
             
             for status in results:
                 post = self._format_post(status)
+                # Add delay between responses
+                await asyncio.sleep(1)
                 response = await self.generate_entertainment_response(post['content'])
                 post['ai_response'] = response
                 formatted_posts.append(post)
