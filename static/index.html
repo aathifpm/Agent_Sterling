@@ -3,80 +3,183 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Control panel for Agent Sterling Twitter Bot">
+    <meta name="theme-color" content="#4F46E5">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Fira+Code&display=swap" rel="stylesheet">
+    <meta name="description" content="Control panel for Agent Sterling Social Bot">
     <title>Agent Sterling Control Panel</title>
-    <link rel="icon" type="image/x-icon" href="/static/sterling.jpg">
-    <link rel="stylesheet" href="/static/styles.css">
-    <meta name="csrf-token" content="{{ csrf_token }}">
+    <link rel="icon" type="image/x-icon" href="sterling.jpg">
+    <link rel="stylesheet" href="styles.css">
 </head>
 <body>
     <div class="container">
-        <h1>🤖 Agent Sterling Control Panel</h1>
-        
-        <div class="section">
-            <h2>Monitoring Settings</h2>
-            <div class="control-group">
-                <label for="accountToWatch">Account to Watch:</label>
-                <input type="text" id="accountToWatch" placeholder="@username">
+        <header>
+            <h1>🤖 Agent Sterling Control Panel</h1>
+            <div class="platform-toggle">
+                <button class="platform-btn active" data-platform="mastodon">Mastodon</button>
+                <button class="platform-btn" data-platform="twitter">Twitter</button>
             </div>
-            <div class="control-group">
-                <label for="checkInterval">Check Interval (seconds):</label>
-                <input type="number" id="checkInterval" min="30" value="60">
-            </div>
-        </div>
+        </header>
 
-        <div class="section">
-            <h2>Response Settings</h2>
-            <div class="control-group">
-                <label for="responseType">Response Type:</label>
-                <select id="responseType">
-                    <option value="entertainment">Entertainment</option>
-                    <option value="research">Research</option>
-                    <option value="sentiment">Sentiment Analysis</option>
-                </select>
-            </div>
-            <div class="control-group">
-                <label for="useEmojis">Use Emojis:</label>
-                <input type="checkbox" id="useEmojis" checked>
-            </div>
-        </div>
+        <div class="main-content">
+            <!-- Platform Settings -->
+            <div class="section">
+                <h2>Platform Settings</h2>
+                <div class="platform-settings">
+                    <!-- Mastodon Settings -->
+                    <div class="platform-config" id="mastodon-config">
+                        <div class="control-group">
+                            <label for="mastodonInstance">Instance URL:</label>
+                            <input type="text" id="mastodonInstance" placeholder="https://mastodon.social">
+                        </div>
+                        <div class="control-group">
+                            <label for="mastodonClientId">Client ID:</label>
+                            <input type="password" id="mastodonClientId" placeholder="Enter your client ID">
+                        </div>
+                        <div class="control-group">
+                            <label for="mastodonClientSecret">Client Secret:</label>
+                            <input type="password" id="mastodonClientSecret" placeholder="Enter your client secret">
+                        </div>
+                        <div class="control-group">
+                            <label for="mastodonToken">Access Token:</label>
+                            <input type="password" id="mastodonToken" placeholder="Enter your access token">
+                        </div>
+                        <div class="help-text">
+                            <p>⚠️ Never share your API keys and tokens</p>
+                            <a href="https://docs.joinmastodon.org/client/token/" target="_blank">How to get Mastodon credentials</a>
+                        </div>
+                    </div>
 
-        <div class="section">
-            <h2>Rate Limits</h2>
-            <div class="control-group">
-                <label for="maxTweetsPerHour">Max Tweets Per Hour:</label>
-                <input type="number" id="maxTweetsPerHour" min="1" max="50" value="10">
+                    <!-- Twitter Settings -->
+                    <div class="platform-config" id="twitter-config" style="display: none;">
+                        <div class="control-group">
+                            <label for="twitterApiKey">API Key:</label>
+                            <input type="password" id="twitterApiKey" placeholder="Enter your API key">
+                        </div>
+                        <div class="control-group">
+                            <label for="twitterApiSecret">API Secret:</label>
+                            <input type="password" id="twitterApiSecret" placeholder="Enter your API secret">
+                        </div>
+                        <div class="control-group">
+                            <label for="twitterAccessToken">Access Token:</label>
+                            <input type="password" id="twitterAccessToken" placeholder="Enter your access token">
+                        </div>
+                        <div class="control-group">
+                            <label for="twitterAccessSecret">Access Token Secret:</label>
+                            <input type="password" id="twitterAccessSecret" placeholder="Enter your access token secret">
+                        </div>
+                        <div class="control-group">
+                            <label for="twitterBearerToken">Bearer Token:</label>
+                            <input type="password" id="twitterBearerToken" placeholder="Enter your bearer token">
+                        </div>
+                        <div class="help-text">
+                            <p>⚠️ Never share your API keys and tokens</p>
+                            <a href="https://developer.twitter.com/en/docs/authentication/oauth-2-0" target="_blank">How to get Twitter credentials</a>
+                        </div>
+                    </div>
+                </div>
             </div>
-            <div class="control-group">
-                <label for="cooldownPeriod">Cooldown Period (minutes):</label>
-                <input type="number" id="cooldownPeriod" min="1" value="5">
-            </div>
-        </div>
 
-        <div class="section">
-            <h2>Content Filters</h2>
-            <div class="control-group">
-                <label for="keywords">Keywords to Watch (comma-separated):</label>
-                <input type="text" id="keywords" placeholder="AI, machine learning, tech">
+            <!-- Monitoring Settings -->
+            <div class="section">
+                <h2>Monitoring Settings</h2>
+                <div class="control-group">
+                    <label for="accountToWatch">Account to Watch:</label>
+                    <input type="text" id="accountToWatch" placeholder="@username">
+                </div>
+                <div class="control-group">
+                    <label for="hashtags">Hashtags to Monitor:</label>
+                    <input type="text" id="hashtags" placeholder="#AI, #ML, #Tech">
+                </div>
+                <div class="control-group">
+                    <label for="checkInterval">Check Interval (seconds):</label>
+                    <input type="number" id="checkInterval" min="60" max="300" value="60">
+                    <small class="help-text">Recommended: 60-300 seconds to avoid rate limits</small>
+                </div>
             </div>
-            <div class="control-group">
-                <label for="blacklist">Blacklisted Words (comma-separated):</label>
-                <input type="text" id="blacklist" placeholder="spam, nsfw">
+
+            <!-- Response Settings -->
+            <div class="section">
+                <h2>Response Settings</h2>
+                <div class="control-group">
+                    <label for="responseType">Response Style:</label>
+                    <select id="responseType">
+                        <option value="entertainment">Entertainment</option>
+                        <option value="meme">Meme Style</option>
+                        <option value="pop_culture">Pop Culture</option>
+                        <option value="wordplay">Wordplay</option>
+                    </select>
+                </div>
+                <div class="control-group">
+                    <label for="useEmojis">Use Emojis:</label>
+                    <input type="checkbox" id="useEmojis" checked>
+                </div>
+                <div class="control-group">
+                    <label for="maxResponseLength">Max Response Length:</label>
+                    <input type="number" id="maxResponseLength" min="50" max="500" value="240">
+                </div>
             </div>
-        </div>
 
-        <div class="actions">
-            <button id="startBtn" class="primary">Start Agent</button>
-            <button id="stopBtn" class="secondary" disabled>Stop Agent</button>
-            <button id="saveConfig" class="secondary">Save Configuration</button>
-        </div>
+            <!-- Rate Limits -->
+            <div class="section">
+                <h2>Rate Limits</h2>
+                <div class="control-group">
+                    <label for="maxPostsPerHour">Max Posts Per Hour:</label>
+                    <input type="number" id="maxPostsPerHour" min="1" max="50" value="10">
+                </div>
+                <div class="control-group">
+                    <label for="cooldownPeriod">Cooldown Period (minutes):</label>
+                    <input type="number" id="cooldownPeriod" min="1" value="5">
+                </div>
+            </div>
 
-        <div class="status">
-            <h3>Status</h3>
-            <div id="statusLog" class="log"></div>
+            <!-- Content Filters -->
+            <div class="section">
+                <h2>Content Filters</h2>
+                <div class="control-group">
+                    <label for="keywords">Keywords to Watch:</label>
+                    <input type="text" id="keywords" placeholder="AI, machine learning, tech">
+                </div>
+                <div class="control-group">
+                    <label for="blacklist">Blacklisted Words:</label>
+                    <input type="text" id="blacklist" placeholder="spam, nsfw">
+                </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="actions">
+                <button id="startBtn" class="primary">Start Agent</button>
+                <button id="stopBtn" class="secondary" disabled>Stop Agent</button>
+                <button id="saveConfig" class="secondary">Save Configuration</button>
+            </div>
+
+            <!-- Status Panel -->
+            <div class="status-panel">
+                <div class="status-indicator" id="statusIndicator">
+                    <span class="status-dot"></span>
+                    <span class="status-text">Stopped</span>
+                </div>
+                <h3>Status & Activity Log</h3>
+                <div class="metrics">
+                    <div class="metric">
+                        <span class="metric-label">Active Time:</span>
+                        <span id="activeTime">00:00:00</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-label">Posts Processed:</span>
+                        <span id="postsProcessed">0</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-label">Responses Sent:</span>
+                        <span id="responsesSent">0</span>
+                    </div>
+                </div>
+                <div id="statusLog" class="log"></div>
+            </div>
         </div>
     </div>
 
-    <script src="/static/app.js"></script>
+    <script src="app.js"></script>
 </body>
 </html> 

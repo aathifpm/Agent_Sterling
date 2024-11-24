@@ -1,81 +1,136 @@
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from src.features.research_agent import ResearchAgent
-from src.features.sentiment_analyzer import SentimentAnalyzer
-from src.features.thread_generator import ThreadGenerator
-from src.agent.base import TwitterAIAgent
-from src.config.gemini_config import GeminiConfig
-from src.platforms.factory import PlatformFactory
-from typing import Dict
+from typing import Dict, List, Optional
+from datetime import datetime
+import asyncio
 import os
 from dotenv import load_dotenv
+from src.platforms.mastodon import MastodonPlatform
+from src.agent.processor import PostProcessor
 
-# Load environment variables
 load_dotenv()
-
-# Verify required environment variables
-required_vars = [
-    'GEMINI_API_KEY',
-    'TWITTER_API_KEY',
-    'TWITTER_API_SECRET',
-    'TWITTER_ACCESS_TOKEN',
-    'TWITTER_ACCESS_TOKEN_SECRET',
-    'TWITTER_BEARER_TOKEN'
-]
-
-missing_vars = [var for var in required_vars if not os.getenv(var)]
-if missing_vars:
-    raise ValueError(f"Missing required environment variables: {', '.join(missing_vars)}")
 
 app = FastAPI()
 
-# Initialize configurations
-gemini_config = GeminiConfig(os.getenv("GEMINI_API_KEY"))
-credentials = {
-    'bearer_token': os.getenv('TWITTER_BEARER_TOKEN'),
-    'api_key': os.getenv('TWITTER_API_KEY'),
-    'api_secret': os.getenv('TWITTER_API_SECRET'),
-    'access_token': os.getenv('TWITTER_ACCESS_TOKEN'),
-    'access_secret': os.getenv('TWITTER_ACCESS_TOKEN_SECRET')
-}
+# CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-# Initialize agent
-agent = TwitterAIAgent(credentials)
+# Models
+class Monitoring(BaseModel):
+    accountToWatch: str
+    hashtags: List[str]
+    checkInterval: int
 
-class TweetRequest(BaseModel):
-    text: str
+class Response(BaseModel):
     type: str
+    useEmojis: bool
+    maxLength: int
+
+class RateLimits(BaseModel):
+    maxPostsPerHour: int
+    cooldownPeriod: int
+
+class Filters(BaseModel):
+    keywords: List[str]
+    blacklist: List[str]
 
 class PlatformConfig(BaseModel):
-    platform_type: str
-    credentials: Dict
+    platform: str
+    monitoring: Monitoring
+    response: Response
+    rateLimits: RateLimits
+    filters: Filters
 
-@app.post("/analyze")
-async def analyze_tweet(request: TweetRequest):
+# Global processor instance
+processor = PostProcessor()
+background_task = None
+
+@app.post("/api/start")
+async def start_agent(config: PlatformConfig):
+    global background_task
     try:
-        if request.type == "research":
-            research_agent = ResearchAgent(gemini_config)
-            return research_agent.research_topic(request.text)
-        elif request.type == "sentiment":
-            sentiment_analyzer = SentimentAnalyzer(gemini_config)
-            return sentiment_analyzer.analyze_sentiment(request.text)
-        elif request.type == "thread":
-            thread_generator = ThreadGenerator(gemini_config)
-            return thread_generator.generate_thread(request.text)
+        print("Starting agent with config:", config.dict())  # Debug print
+        
+        # Initialize platform
+        if config.platform == "mastodon":
+            credentials = {
+                'instance_url': os.getenv('MASTODON_INSTANCE_URL'),
+                'client_id': os.getenv('MASTODON_CLIENT_ID'),
+                'client_secret': os.getenv('MASTODON_CLIENT_SECRET'),
+                'access_token': os.getenv('MASTODON_ACCESS_TOKEN')
+            }
+            processor.platform = MastodonPlatform(credentials)
+            print("Mastodon platform initialized")
+
+        # Set config and start processing
+        processor.config = config
+        
+        # Cancel existing task if running
+        if background_task:
+            background_task.cancel()
+            try:
+                await background_task
+            except asyncio.CancelledError:
+                pass
+        
+        # Start new background task
+        background_task = asyncio.create_task(processor.start_processing())
+        print("Background task created")
+        
+        return {
+            "status": "success",
+            "message": "Agent started successfully",
+            "logs": processor.logs
+        }
     except Exception as e:
+        print(f"Error starting agent: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/health")
-def health_check():
-    return {"status": "healthy"}
-
-@app.post("/platform/initialize")
-async def initialize_platform(config: PlatformConfig):
+@app.post("/api/stop")
+async def stop_agent():
+    global background_task
     try:
-        platform = PlatformFactory.create_platform(
-            config.platform_type,
-            config.credentials
-        )
-        return {"status": "success", "platform": config.platform_type}
+        # Stop the processor
+        processor.stop()
+        
+        # Cancel the background task
+        if background_task:
+            background_task.cancel()
+            try:
+                await background_task
+            except asyncio.CancelledError:
+                pass
+            background_task = None
+        
+        return {
+            "status": "success", 
+            "message": "Agent stopped successfully",
+            "logs": processor.logs
+        }
     except Exception as e:
+        print(f"Error stopping agent: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/status")
+async def get_status():
+    try:
+        return {
+            "status": "running" if processor.is_running else "stopped",
+            "posts_processed": processor.posts_processed,
+            "responses_sent": processor.responses_sent,
+            "logs": processor.logs[-10:]  # Return last 10 logs
+        }
+    except Exception as e:
+        print(f"Error in status check: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
