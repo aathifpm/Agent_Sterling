@@ -1,7 +1,7 @@
 import asyncio
 from datetime import datetime
 from typing import Dict, List, Set
-
+from twitter_agent import TwitterAIAgent
 class PostProcessor:
     def __init__(self):
         self.is_running = False
@@ -39,14 +39,40 @@ class PostProcessor:
         """Process posts for each hashtag"""
         for hashtag in self.config.monitoring.hashtags:
             try:
-                posts = await self.platform.search_hashtag(hashtag, limit=5)
-                
-                if posts and not "error" in posts[0]:
-                    for post in posts:
-                        if "error" not in post and post['id'] not in self.processed_posts:
-                            await self.process_single_post(post)
-                            self.processed_posts.add(post['id'])
-                        
+                if isinstance(self.platform, TwitterAIAgent):
+                    # Use Twitter-specific search
+                    tweets = self.platform.search_tweets(hashtag, max_results=5)
+                    if tweets:
+                        for tweet in tweets:
+                            if tweet.id not in self.processed_posts:
+                                self.log_info(
+                                    f"Retrieved tweet from @{tweet.author_id}", 
+                                    {"content": tweet.text}
+                                )
+                                
+                                # Generate and post response
+                                response = await self.platform.generate_entertainment_response(tweet.text)
+                                reply_result = await self.platform.reply_to_tweet(tweet.id, response)
+                                
+                                if "error" not in reply_result:
+                                    self.log_success(
+                                        f"Responded to @{tweet.author_id}",
+                                        {"response": response}
+                                    )
+                                    self.responses_sent += 1
+                                
+                                self.processed_posts.add(tweet.id)
+                                self.posts_processed += 1
+                else:
+                    # Handle Mastodon posts
+                    posts = await self.platform.search_hashtag(hashtag, limit=5)
+                    
+                    if posts and not "error" in posts[0]:
+                        for post in posts:
+                            if "error" not in post and post['id'] not in self.processed_posts:
+                                await self.process_single_post(post)
+                                self.processed_posts.add(post['id'])
+                            
             except Exception as e:
                 self.log_error(f"Error processing #{hashtag}: {str(e)}")
 
@@ -54,14 +80,14 @@ class PostProcessor:
         """Process a single post"""
         try:
             self.log_info(
-                f"Retrieved post from @{post['author']}", 
+                f"Processing post from @{post['author']}", 
                 {
                     "content": post['content'][:200] + "..." if len(post['content']) > 200 else post['content']
                 }
             )
             
+            # Generate and send response
             response = await self.platform.generate_entertainment_response(post['content'])
-            
             reply = await self.platform.reply_to_post(post['id'], response)
             
             if "error" not in reply:
@@ -74,6 +100,11 @@ class PostProcessor:
                 self.responses_sent += 1
             
             self.posts_processed += 1
+            
+            # Add delay before processing next post
+            delay = self.config.response.processingDelay if self.config else 5
+            self.log_info(f"Waiting {delay} seconds before next response...")
+            await asyncio.sleep(delay)
             
         except Exception as e:
             self.log_error(f"Error processing post: {str(e)}")
