@@ -10,8 +10,7 @@ class AgentController {
             response: {
                 type: 'entertainment',
                 useEmojis: true,
-                maxLength: 240,
-                processingDelay: 5
+                maxLength: 240
             },
             rateLimits: {
                 maxPostsPerHour: 10,
@@ -35,7 +34,6 @@ class AgentController {
         this.initializeEventListeners();
         this.loadConfiguration();
         this.updateMetricsDisplay();
-        this.lastLogTime = {};
     }
 
     initializeEventListeners() {
@@ -113,9 +111,6 @@ class AgentController {
         });
         document.getElementById('maxResponseLength').addEventListener('input', (e) => {
             this.config.response.maxLength = parseInt(e.target.value);
-        });
-        document.getElementById('processingDelay').addEventListener('input', (e) => {
-            this.config.response.processingDelay = parseInt(e.target.value);
         });
 
         // Rate limits
@@ -274,7 +269,6 @@ class AgentController {
         document.getElementById('responseType').value = this.config.response.type;
         document.getElementById('useEmojis').checked = this.config.response.useEmojis;
         document.getElementById('maxResponseLength').value = this.config.response.maxLength;
-        document.getElementById('processingDelay').value = this.config.response.processingDelay || 5;
 
         // Rate limits
         document.getElementById('maxPostsPerHour').value = this.config.rateLimits.maxPostsPerHour;
@@ -316,10 +310,7 @@ class AgentController {
 
     startStatusChecking() {
         if (!this.statusCheckInterval) {
-            this.statusCheckInterval = setInterval(() => {
-                this.checkStatus();
-                this.updateMetricsDisplay();
-            }, 5000);
+            this.statusCheckInterval = setInterval(() => this.checkStatus(), 1000);
         }
     }
 
@@ -339,19 +330,9 @@ class AgentController {
             this.metrics.postsProcessed = data.posts_processed;
             this.metrics.responsesSent = data.responses_sent;
             
-            // Process new logs in batch
+            // Process new logs
             if (data.logs && data.logs.length > 0) {
-                // Group logs by type and message to prevent duplicates
-                const uniqueLogs = data.logs.reduce((acc, log) => {
-                    const key = `${log.type}-${log.message}`;
-                    acc[key] = log;
-                    return acc;
-                }, {});
-                
-                // Process unique logs
-                Object.values(uniqueLogs).forEach(log => {
-                    this.log(log.type, log.message, log.details);
-                });
+                data.logs.forEach(log => this.log(log.type, log.message, log.details));
             }
             
             this.updateMetricsDisplay();
@@ -388,29 +369,24 @@ class AgentController {
     }
 
     log(type, message, details = null) {
-        const now = Date.now();
-        const logKey = `${type}-${message}`;
-        
-        // Only add log entry if 5 seconds have passed since last similar log
-        if (this.lastLogTime[logKey] && (now - this.lastLogTime[logKey] < 5000)) {
-            return;
-        }
-        
-        this.lastLogTime[logKey] = now;
-
         const logEntry = document.createElement('div');
         logEntry.className = `log-entry ${type}`;
         
+        // Create timestamp
         const timestamp = new Date().toLocaleTimeString();
+        
+        // Create main message
         const messageText = document.createElement('div');
         messageText.className = 'log-message';
         messageText.innerHTML = `<span class="log-time">[${timestamp}]</span> ${message}`;
         logEntry.appendChild(messageText);
         
+        // Add details if provided
         if (details) {
             const detailsText = document.createElement('div');
             detailsText.className = 'log-details';
             if (typeof details === 'object') {
+                // Pretty print objects
                 detailsText.innerHTML = Object.entries(details)
                     .map(([key, value]) => `<span class="log-key">${key}:</span> ${value}`)
                     .join('<br>');
@@ -427,16 +403,18 @@ class AgentController {
         logEntry.style.transform = 'translateY(10px)';
         statusLog.appendChild(logEntry);
         
+        // Trigger animation
         requestAnimationFrame(() => {
             logEntry.style.transition = 'all 0.3s ease';
             logEntry.style.opacity = '1';
             logEntry.style.transform = 'translateY(0)';
         });
         
+        // Scroll to bottom
         statusLog.scrollTop = statusLog.scrollHeight;
         
-        // Keep only last 50 entries instead of 100
-        while (statusLog.children.length > 50) {
+        // Keep only last 100 entries
+        while (statusLog.children.length > 100) {
             statusLog.removeChild(statusLog.firstChild);
         }
     }

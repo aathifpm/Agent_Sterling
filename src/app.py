@@ -32,7 +32,6 @@ class Response(BaseModel):
     type: str
     useEmojis: bool
     maxLength: int
-    processingDelay: int = 5  # Default 5 second delay between responses
 
 class RateLimits(BaseModel):
     maxPostsPerHour: int
@@ -126,7 +125,7 @@ async def get_status():
             "status": "running" if processor.is_running else "stopped",
             "posts_processed": processor.posts_processed,
             "responses_sent": processor.responses_sent,
-            "logs": processor.logs[-5:]  # Return only last 5 logs instead of 10
+            "logs": processor.logs[-10:]  # Return last 10 logs
         }
     except Exception as e:
         print(f"Error in status check: {str(e)}")
