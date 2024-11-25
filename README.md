@@ -112,6 +112,58 @@ python scripts/setup_mastodon.py
 ```
 This will guide you through the Mastodon authentication process.
 
+## Important Notes ⚠️
+
+1. **Platform Status**
+   - ✅ Mastodon Integration: Fully functional and tested
+   - ❌ Twitter Integration: Currently malfunctioning and under maintenance
+
+2. **API Credentials Setup**
+   - API credentials must be entered in **both** locations:
+     1. Frontend web control panel
+     2. `.env` file in the root directory
+   - This redundancy is due to a known issue with frontend-backend communication
+
+3. **Agent Operation**
+   - Always save your configuration before starting the agent
+   - Use the "Save Configuration" button and wait for confirmation
+   - Then use the "Start Agent" button to begin operations
+
+## Obtaining API Credentials 🔑
+
+### Mastodon Credentials (mastodon.social)
+
+1. Log in to your Mastodon account at [mastodon.social](https://mastodon.social/)
+
+2. Go to Settings > Development > New Application
+
+3. Fill in the application details:
+   - Application name: `Agent_Sterling` (or your preferred name)
+   - Website: Your website (optional)
+   - Redirect URI: Leave as default
+   - Scopes (select all):
+     - `read`
+     - `write`
+     - `follow`
+     - `push`
+
+4. Click "Submit" to create your application
+
+5. You'll receive these credentials:
+   - Client key (API key)
+   - Client secret
+   - Access token
+
+6. Add these credentials to:
+   - Your `.env` file:
+     ```env
+     MASTODON_INSTANCE_URL=https://mastodon.social
+     MASTODON_CLIENT_ID=your_client_key
+     MASTODON_CLIENT_SECRET=your_client_secret
+     MASTODON_ACCESS_TOKEN=your_access_token
+     ```
+   - The web control panel's Mastodon configuration section
+
 ## Features in Detail 🔍
 
 ### Content Analysis
