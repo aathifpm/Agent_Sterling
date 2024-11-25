@@ -55,6 +55,7 @@ TWITTER_API_SECRET=your_api_secret
 TWITTER_ACCESS_TOKEN=your_access_token
 TWITTER_ACCESS_TOKEN_SECRET=your_access_token_secret
 TWITTER_BEARER_TOKEN=your_bearer_token
+(For Now twitter's api not needed as )
 
 # Mastodon Credentials
 MASTODON_INSTANCE_URL=your_instance_url
@@ -65,6 +66,7 @@ MASTODON_ACCESS_TOKEN=your_access_token
 # Gemini API
 GEMINI_API_KEY=your_gemini_key
 ```
+## Obtaining API Credentials 🔑
 
 ### Gemini Pro API Key
 
@@ -93,21 +95,74 @@ Note: Gemini Pro features include:
 
 For more details about Gemini Pro capabilities, visit [Google DeepMind's Gemini Pro page](https://deepmind.google/technologies/gemini/pro/).
 
+
+### Mastodon Credentials (mastodon.social)
+
+1. Log in to your Mastodon account at [mastodon.social](https://mastodon.social/)
+
+2. Go to Settings > Development > New Application
+
+3. Fill in the application details:
+   - Application name: `Agent_Sterling` (or your preferred name)
+   - Website: Your website (optional)
+   - Redirect URI: Leave as default
+   - Scopes (select all):
+     - `read`
+     - `write`
+     - `follow`
+     - `push`
+
+4. Click "Submit" to create your application
+
+5. You'll receive these credentials:
+   - Client key (API key)
+   - Client secret
+   - Access token
+
+6. Add these credentials to:
+   - Your `.env` file:
+     ```env
+     MASTODON_INSTANCE_URL=https://mastodon.social
+     MASTODON_CLIENT_ID=your_client_key
+     MASTODON_CLIENT_SECRET=your_client_secret
+     MASTODON_ACCESS_TOKEN=your_access_token
+     ```
+   - The web control panel's Mastodon configuration section
+
 ## Usage 🚀
 
-### Web Control Panel
+### Server Setup
 
-1. Start the web server:
+Start the Backend Server:
 ```bash
-cd static
-http.server
-```
-2. Start the backend server in a new terminal on root directory:
-```bash
+# From root directory
 uvicorn src.app:app --reload --log-level debug
 ```
 
-3. Access the control panel at `http://localhost:8000` to:
+### Web Control Panel
+
+#### Prerequisites
+Before using Method, you'll need to install Node.js:
+
+1. Visit [Node.js official website](https://nodejs.org/)
+2. Download and install the LTS (Long Term Support) version
+3. Verify installation by running:
+```bash
+node --version
+npm --version
+```
+
+#### Method : Node.js HTTP Server
+```bash
+# Install http-server globally (one-time setup)
+npm install -g http-server
+
+# Navigate to static directory and start Frontend server
+cd static
+http-server
+```
+
+3. Access the control panel at `http://localhost:8080` to:
 - Configure platform settings and credentials
 - Set monitoring parameters and hashtags
 - Customize response behavior and rate limits
@@ -153,40 +208,6 @@ This will guide you through the Mastodon authentication process.
    - Use the "Save Configuration" button and wait for confirmation
    - Then use the "Start Agent" button to begin operations
 
-## Obtaining API Credentials 🔑
-
-### Mastodon Credentials (mastodon.social)
-
-1. Log in to your Mastodon account at [mastodon.social](https://mastodon.social/)
-
-2. Go to Settings > Development > New Application
-
-3. Fill in the application details:
-   - Application name: `Agent_Sterling` (or your preferred name)
-   - Website: Your website (optional)
-   - Redirect URI: Leave as default
-   - Scopes (select all):
-     - `read`
-     - `write`
-     - `follow`
-     - `push`
-
-4. Click "Submit" to create your application
-
-5. You'll receive these credentials:
-   - Client key (API key)
-   - Client secret
-   - Access token
-
-6. Add these credentials to:
-   - Your `.env` file:
-     ```env
-     MASTODON_INSTANCE_URL=https://mastodon.social
-     MASTODON_CLIENT_ID=your_client_key
-     MASTODON_CLIENT_SECRET=your_client_secret
-     MASTODON_ACCESS_TOKEN=your_access_token
-     ```
-   - The web control panel's Mastodon configuration section
 
 ## Features in Detail 🔍
 
