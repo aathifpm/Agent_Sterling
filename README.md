@@ -66,6 +66,33 @@ MASTODON_ACCESS_TOKEN=your_access_token
 GEMINI_API_KEY=your_gemini_key
 ```
 
+### Gemini Pro API Key
+
+1. Visit [Google AI Studio](https://makersuite.google.com/app/apikey)
+
+2. Sign in with your Google account
+
+3. Click on "Get API Key" in the top navigation
+
+4. Either:
+   - Create a new API key
+   - Use an existing key from your projects
+
+5. Add the API key to:
+   - Your `.env` file:
+     ```env
+     GEMINI_API_KEY=your_gemini_key
+     ```
+   - Not required on web control panel's API configuration section
+
+Note: Gemini Pro features include:
+- Multimodal capabilities (text, images, audio, video)
+- Context window of up to 2 million tokens
+- Advanced reasoning and code analysis
+- Support for multiple programming languages
+
+For more details about Gemini Pro capabilities, visit [Google DeepMind's Gemini Pro page](https://deepmind.google/technologies/gemini/pro/).
+
 ## Usage 🚀
 
 ### Web Control Panel
