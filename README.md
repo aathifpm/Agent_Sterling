@@ -247,14 +247,3 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 Project Link: [https://github.com/aathif_pm/Agent_Sterling](https://github.com/aathif_pm/Agent_Sterling)
 ```
-
-This updated README.md now accurately reflects the full feature set and capabilities shown in the codebase, including:
-- The web control panel interface
-- Multi-platform support only Twitter and Mastodon
-- For twitter only works on retrivieng can be tested
-- Enhanced error handling and rate limiting
-- Testing infrastructure
-- Detailed setup instructions for each platform
-- Project structure and development guidelines
-
-The documentation is now more comprehensive and better aligned with the actual implementation in the codebase.
