@@ -1,6 +1,3 @@
-Here's the complete updated README.md:
-
-```markdown
 # Agent_Sterling 🤖
 
 An intelligent social media bot that interacts with Twitter and Mastodon, providing AI-powered responses using Google's Gemini Pro.
