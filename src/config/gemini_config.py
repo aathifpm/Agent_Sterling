@@ -9,7 +9,7 @@ class GeminiConfig:
         # Configure the Gemini API
         genai.configure(api_key=api_key)
         try:
-            self.model = genai.GenerativeModel('gemini-1.5-pro')
+            self.model = genai.GenerativeModel('gemini-1.5-flash-latest')
         except Exception as e:
             raise Exception(f"Failed to initialize Gemini model: {str(e)}")
         
