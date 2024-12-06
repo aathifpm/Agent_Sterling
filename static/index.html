@@ -23,9 +23,9 @@
         </header>
 
         <div class="main-content">
-            <!-- Combine Platform & Monitoring Settings -->
+            <!-- Platform Settings -->
             <div class="section">
-                <h2>Platform & Monitoring</h2>
+                <h2>Platform Settings</h2>
                 <div class="platform-settings">
                     <!-- Mastodon Settings -->
                     <div class="platform-config" id="mastodon-config">
@@ -79,7 +79,11 @@
                         </div>
                     </div>
                 </div>
-                <!-- Monitoring Settings -->
+            </div>
+
+            <!-- Monitoring Settings -->
+            <div class="section">
+                <h2>Monitoring Settings</h2>
                 <div class="control-group">
                     <label for="accountToWatch">Account to Watch:</label>
                     <input type="text" id="accountToWatch" placeholder="@username">
@@ -95,9 +99,9 @@
                 </div>
             </div>
 
-            <!-- Combine Response & Rate Limits -->
+            <!-- Response Settings -->
             <div class="section">
-                <h2>Response & Rate Controls</h2>
+                <h2>Response Settings</h2>
                 <div class="control-group">
                     <label for="responseType">Response Style:</label>
                     <select id="responseType">
@@ -115,6 +119,11 @@
                     <label for="maxResponseLength">Max Response Length:</label>
                     <input type="number" id="maxResponseLength" min="50" max="500" value="240">
                 </div>
+            </div>
+
+            <!-- Rate Limits -->
+            <div class="section">
+                <h2>Rate Limits</h2>
                 <div class="control-group">
                     <label for="maxPostsPerHour">Max Posts Per Hour:</label>
                     <input type="number" id="maxPostsPerHour" min="1" max="50" value="10">
@@ -125,9 +134,9 @@
                 </div>
             </div>
 
-            <!-- Content Filters & Actions -->
+            <!-- Content Filters -->
             <div class="section">
-                <h2>Filters & Controls</h2>
+                <h2>Content Filters</h2>
                 <div class="control-group">
                     <label for="keywords">Keywords to Watch:</label>
                     <input type="text" id="keywords" placeholder="AI, machine learning, tech">
@@ -136,14 +145,16 @@
                     <label for="blacklist">Blacklisted Words:</label>
                     <input type="text" id="blacklist" placeholder="spam, nsfw">
                 </div>
-                <div class="actions">
-                    <button id="startBtn" class="primary">Start Agent</button>
-                    <button id="stopBtn" class="secondary" disabled>Stop Agent</button>
-                    <button id="saveConfig" class="secondary">Save Configuration</button>
-                </div>
             </div>
 
-            <!-- Status Panel (Full Width) -->
+            <!-- Action Buttons -->
+            <div class="actions">
+                <button id="startBtn" class="primary">Start Agent</button>
+                <button id="stopBtn" class="secondary" disabled>Stop Agent</button>
+                <button id="saveConfig" class="secondary">Save Configuration</button>
+            </div>
+
+            <!-- Status Panel -->
             <div class="status-panel">
                 <div class="status-indicator" id="statusIndicator">
                     <span class="status-dot"></span>
