@@ -2,6 +2,13 @@ class AgentController {
     constructor() {
         this.config = {
             platform: 'mastodon',
+            credentials: {
+                instance_url: '',
+                client_id: '',
+                client_secret: '',
+                access_token: '',
+                gemini_api_key: ''
+            },
             monitoring: {
                 accountToWatch: '',
                 hashtags: [],
@@ -57,16 +64,19 @@ class AgentController {
 
         // Mastodon settings
         document.getElementById('mastodonInstance').addEventListener('input', (e) => {
-            this.config.credentials.mastodon.instance_url = e.target.value;
+            this.config.credentials.instance_url = e.target.value;
         });
         document.getElementById('mastodonClientId').addEventListener('input', (e) => {
-            this.config.credentials.mastodon.client_id = e.target.value;
+            this.config.credentials.client_id = e.target.value;
         });
         document.getElementById('mastodonClientSecret').addEventListener('input', (e) => {
-            this.config.credentials.mastodon.client_secret = e.target.value;
+            this.config.credentials.client_secret = e.target.value;
         });
         document.getElementById('mastodonToken').addEventListener('input', (e) => {
-            this.config.credentials.mastodon.access_token = e.target.value;
+            this.config.credentials.access_token = e.target.value;
+        });
+        document.getElementById('geminiApiKey').addEventListener('input', (e) => {
+            this.config.credentials.gemini_api_key = e.target.value;
         });
 
         // Twitter settings
@@ -128,6 +138,16 @@ class AgentController {
         document.getElementById('blacklist').addEventListener('input', (e) => {
             this.config.filters.blacklist = e.target.value.split(',').map(b => b.trim());
         });
+
+        // DM settings
+        document.getElementById('dmEnabled').addEventListener('change', updateDMSettings);
+        document.getElementById('autoReply').addEventListener('change', updateDMSettings);
+        document.getElementById('replyInterval').addEventListener('input', updateDMSettings);
+
+        // Like settings
+        document.getElementById('likeEnabled').addEventListener('change', updateLikeSettings);
+        document.getElementById('maxLikesPerHour').addEventListener('input', updateLikeSettings);
+        document.getElementById('likeProbability').addEventListener('input', updateLikeSettings);
     }
 
     togglePlatform(platform) {
@@ -140,36 +160,42 @@ class AgentController {
     }
 
     async startAgent() {
-        try {
-            // Validate configuration
-            if (!this.validateConfig()) {
-                this.log('error', 'Please configure hashtags to monitor and check interval');
-                return;
+        const config = {
+            platform: this.config.platform,
+            credentials: {
+                instance_url: document.getElementById('mastodonInstance').value,
+                client_id: document.getElementById('mastodonClientId').value,
+                client_secret: document.getElementById('mastodonClientSecret').value,
+                access_token: document.getElementById('mastodonToken').value,
+                gemini_api_key: document.getElementById('geminiApiKey').value
+            },
+            monitoring: {
+                accountToWatch: this.config.monitoring.accountToWatch,
+                hashtags: this.config.monitoring.hashtags,
+                checkInterval: this.config.monitoring.checkInterval
+            },
+            response: {
+                type: this.config.response.type,
+                useEmojis: this.config.response.useEmojis,
+                maxLength: this.config.response.maxLength
+            },
+            rateLimits: {
+                maxPostsPerHour: this.config.rateLimits.maxPostsPerHour,
+                cooldownPeriod: this.config.rateLimits.cooldownPeriod
+            },
+            filters: {
+                keywords: this.config.filters.keywords,
+                blacklist: this.config.filters.blacklist
             }
+        };
 
-            // Prepare config
-            const configToSend = {
-                ...this.config,
-                monitoring: {
-                    ...this.config.monitoring,
-                    hashtags: Array.isArray(this.config.monitoring.hashtags) 
-                        ? this.config.monitoring.hashtags 
-                        : this.config.monitoring.hashtags.split(',')
-                            .map(h => h.trim())
-                            .filter(h => h)
-                            .map(h => h.startsWith('#') ? h.substring(1) : h),
-                    checkInterval: parseInt(this.config.monitoring.checkInterval)
-                }
-            };
-
-            console.log('Sending config:', configToSend); // Debug log
-
-            const response = await fetch(`${this.baseUrl}/start`, {
+        try {
+            const response = await fetch('/api/start', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify(configToSend)
+                body: JSON.stringify(config)
             });
 
             if (!response.ok) {
@@ -246,10 +272,11 @@ class AgentController {
         this.togglePlatform(this.config.platform);
 
         // Mastodon settings
-        document.getElementById('mastodonInstance').value = this.config.credentials.mastodon.instance_url;
-        document.getElementById('mastodonClientId').value = this.config.credentials.mastodon.client_id;
-        document.getElementById('mastodonClientSecret').value = this.config.credentials.mastodon.client_secret;
-        document.getElementById('mastodonToken').value = this.config.credentials.mastodon.access_token;
+        document.getElementById('mastodonInstance').value = this.config.credentials.instance_url;
+        document.getElementById('mastodonClientId').value = this.config.credentials.client_id;
+        document.getElementById('mastodonClientSecret').value = this.config.credentials.client_secret;
+        document.getElementById('mastodonToken').value = this.config.credentials.access_token;
+        document.getElementById('geminiApiKey').value = this.config.credentials.gemini_api_key;
 
         // Twitter settings
         document.getElementById('twitterApiKey').value = this.config.credentials.twitter.api_key;
@@ -277,6 +304,16 @@ class AgentController {
         // Content filters
         document.getElementById('keywords').value = this.config.filters.keywords.join(', ');
         document.getElementById('blacklist').value = this.config.filters.blacklist.join(', ');
+
+        // DM settings
+        document.getElementById('dmEnabled').checked = this.config.dm_settings.enabled;
+        document.getElementById('autoReply').checked = this.config.dm_settings.auto_reply;
+        document.getElementById('replyInterval').value = this.config.dm_settings.reply_interval;
+
+        // Like settings
+        document.getElementById('likeEnabled').checked = this.config.like_settings.enabled;
+        document.getElementById('maxLikesPerHour').value = this.config.like_settings.max_likes_per_hour;
+        document.getElementById('likeProbability').value = this.config.like_settings.like_probability * 100;
     }
 
     updateMetricsDisplay() {
@@ -495,3 +532,84 @@ class AgentController {
 document.addEventListener('DOMContentLoaded', () => {
     window.agentController = new AgentController();
 }); 
+async function updatePostStyle() {
+    const styleConfig = {
+        style: document.getElementById('postStyle').value,
+        useEmojis: document.getElementById('useEmojis').checked,
+        useHashtags: document.getElementById('useHashtags').checked,
+        maxLength: parseInt(document.getElementById('maxLength').value)
+    };
+
+    try {
+        const response = await fetch('/api/update-style', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(styleConfig)
+        });
+
+        const data = await response.json();
+        if (response.ok) {
+            showNotification('Style updated successfully', 'success');
+        } else {
+            showNotification('Error updating style', 'error');
+        }
+    } catch (error) {
+        showNotification('Error connecting to server', 'error');
+    }
+}
+
+async function updateDMSettings() {
+    const dmConfig = {
+        enabled: document.getElementById('dmEnabled').checked,
+        auto_reply: document.getElementById('autoReply').checked,
+        reply_interval: parseInt(document.getElementById('replyInterval').value)
+    };
+
+    try {
+        const response = await fetch('/api/update-dm-settings', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(dmConfig)
+        });
+
+        const data = await response.json();
+        if (response.ok) {
+            showNotification('DM settings updated successfully', 'success');
+        } else {
+            showNotification('Error updating DM settings', 'error');
+        }
+    } catch (error) {
+        showNotification('Error connecting to server', 'error');
+    }
+}
+
+async function updateLikeSettings() {
+    const likeConfig = {
+        enabled: document.getElementById('likeEnabled').checked,
+        max_likes_per_hour: parseInt(document.getElementById('maxLikesPerHour').value),
+        like_probability: parseInt(document.getElementById('likeProbability').value) / 100
+    };
+
+    try {
+        const response = await fetch('/api/update-like-settings', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(likeConfig)
+        });
+
+        const data = await response.json();
+        if (response.ok) {
+            showNotification('Like settings updated successfully', 'success');
+        } else {
+            showNotification('Error updating like settings', 'error');
+        }
+    } catch (error) {
+        showNotification('Error connecting to server', 'error');
+    }
+}
