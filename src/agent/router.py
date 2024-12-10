@@ -7,7 +7,7 @@ class IntentRouter:
         self.HANDLERS = {
             'research': self.handle_research,
             'sentiment': self.handle_sentiment,
-            # Add more handlers as needed
+            'image_analysis': self.handle_image_analysis
         }
 
     async def route(self, intent, tweet):
@@ -23,6 +23,15 @@ class IntentRouter:
     async def handle_sentiment(self, tweet):
         analyzer = SentimentAnalyzer(self.llm)
         return await analyzer.analyze_sentiment(tweet)
+        
+    async def handle_image_analysis(self, tweet, image):
+        """Handle image-specific analysis"""
+        analysis = await self.llm.analyze_content(tweet, image)
+        return {
+            "status": "success",
+            "analysis": analysis,
+            "type": "image_analysis"
+        }
         
     async def handle_default(self, tweet):
         return {"error": "Invalid intent specified"}

@@ -9,6 +9,9 @@ from dotenv import load_dotenv
 import re
 import time
 import asyncio
+import requests
+from io import BytesIO
+from PIL import Image
 
 # Download required NLTK data
 nltk.download('punkt')
@@ -64,35 +67,103 @@ class MastodonPlatform:
         await asyncio.sleep(2)  # Add 2-second delay between requests
         self.request_count += 1
 
-    async def generate_entertainment_response(self, post_text: str, max_retries=3) -> str:
-        """Generate a short, fun response using Gemini"""
+    def _get_media_attachments(self, status: Dict) -> List[Dict]:
+        """Extract media attachments from status"""
+        try:
+            media_attachments = status.get('media_attachments', [])
+            return [
+                {
+                    'url': media['url'],
+                    'type': media['type'],
+                    'description': media.get('description', '')
+                }
+                for media in media_attachments
+                if media['type'] in ['image']  # Only process images for now
+            ]
+        except Exception as e:
+            print(f"Error processing media attachments: {str(e)}")
+            return []
+
+    async def _download_image(self, url: str) -> Optional[Image.Image]:
+        """Download and process image from URL"""
+        try:
+            response = requests.get(url)
+            response.raise_for_status()
+            return Image.open(BytesIO(response.content))
+        except Exception as e:
+            print(f"Error downloading image: {str(e)}")
+            return None
+
+    async def generate_entertainment_response(self, post_text: str, status: Dict = None, max_retries=3) -> str:
+        """Generate a short, fun response using Gemini, including image analysis if present"""
         clean_text = self._clean_html(post_text)
         
-        prompt = f"""
-        Create a fun, short response to: "{clean_text}"
+        # Get media attachments if status is provided
+        images = []
+        if status:
+            media_attachments = self._get_media_attachments(status)
+            for media in media_attachments:
+                if image := await self._download_image(media['url']):
+                    images.append({
+                        'image': image,
+                        'description': media['description']
+                    })
+
+        # Modify prompt based on presence of images
+        base_prompt = f"""Create a fun, short response to this post: "{clean_text}" """
+        
+        if images:
+            base_prompt += "\nThe post includes images which I'll analyze for context."
+            base_prompt += "\nIncorporate relevant details from the images in the response."
+        
+        prompt = base_prompt + """
         Rules:
         - Maximum 2 sentences
         - Include 1-2 emojis
         - Be witty and friendly
         - Match the post's tone
         - Add a relevant pop culture reference if it fits naturally
+        - Reference image content naturally (if images present)
         
         Format: Just the response text with emojis.
         """
         
         for attempt in range(max_retries):
             try:
-                # Add longer delay between Gemini API calls
                 await asyncio.sleep(5)  # Wait 5 seconds between attempts
-                response = self.model.generate_content(prompt)
-                return response.text[:240].strip()
+                
+                if images:
+                    # Use multimodal generation if images are present
+                    generation_config = {
+                        'temperature': 0.7,
+                        'top_p': 0.8,
+                        'top_k': 40
+                    }
+                    
+                    # Create a list of content parts for multimodal input
+                    content_parts = [prompt]
+                    for img_data in images:
+                        content_parts.append(img_data['image'])
+                        if img_data['description']:
+                            content_parts.append(f"Image description: {img_data['description']}")
+                    
+                    response = self.model.generate_content(
+                        content_parts,
+                        generation_config=generation_config
+                    )
+                else:
+                    # Text-only generation
+                    response = self.model.generate_content(prompt)
+                
+                return response.text[:240].strip()  # Maintain character limit
+                
             except Exception as e:
                 if attempt < max_retries - 1:
-                    wait_time = 10 * (attempt + 1)  # Longer wait times between retries
+                    wait_time = 10 * (attempt + 1)
                     print(f"Retry {attempt + 1}/{max_retries} after {wait_time}s...")
                     await asyncio.sleep(wait_time)
                 else:
-                    # Generate a simple response instead of the default message
+                    print(f"Error generating response: {str(e)}")
                     return "✨ Interesting perspective! Thanks for sharing! 🌟"
 
     async def search_hashtag(self, hashtag: str, limit: int = 5) -> List[Dict]:
@@ -127,12 +198,10 @@ class MastodonPlatform:
             return {"error": str(e)}
 
     def _format_post(self, status: Dict) -> Dict:
-        """Format post with key information"""
+        """Format post with key information including raw status for media processing"""
         try:
-            # Clean the content
             clean_content = self._clean_html(status['content'])
             
-            # Extract keywords
             tokens = word_tokenize(clean_content.lower())
             stop_words = set(stopwords.words('english'))
             keywords = [word for word in tokens 
@@ -143,7 +212,8 @@ class MastodonPlatform:
                 "content": clean_content,
                 "author": status['account']['acct'],
                 "keywords": keywords,
-                "created_at": status['created_at']
+                "created_at": status['created_at'],
+                "raw_status": status  # Include raw status for media processing
             }
         except Exception as e:
             print(f"Error formatting post: {str(e)}")
@@ -186,4 +256,18 @@ class MastodonPlatform:
             }
         except Exception as e:
             print(f"Error handling mention: {str(e)}")
+            return {"error": str(e)}
+
+    async def process_single_post(self, post: Dict):
+        """Process a single post including any images"""
+        try:
+            response = await self.generate_entertainment_response(
+                post['content'],
+                status=post['raw_status']  # Pass the original status object
+            )
+            
+            reply = await self.reply_to_post(post['id'], response)
+            return reply
+        except Exception as e:
+            print(f"Error processing post: {str(e)}")
             return {"error": str(e)}
