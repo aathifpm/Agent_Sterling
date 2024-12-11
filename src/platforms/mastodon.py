@@ -29,56 +29,55 @@ class PostStyle:
     ANALYST = "analyst"
 
 class MastodonPlatform:
-    def __init__(self, credentials: Dict):
+    def __init__(self, credentials):
         self.client = Mastodon(
-            client_id=credentials.get('client_id'),
-            client_secret=credentials.get('client_secret'),
-            access_token=credentials.get('access_token'),
-            api_base_url=credentials.get('instance_url')
+            client_id=credentials['client_id'],
+            client_secret=credentials['client_secret'],
+            access_token=credentials['access_token'],
+            api_base_url=credentials['instance_url']
         )
         
-        # Initialize Gemini with provided key
-        genai.configure(api_key=credentials.get('gemini_api_key'))
-        self.model = genai.GenerativeModel('gemini-1.5-pro')
-        
-        # Rate limiting settings
-        self.last_request_time = 0
-        self.request_count = 0
-        self.max_requests_per_minute = 30  # Reduced from 60 to be safer
-        self.retry_delay = 5  # Increased from 2 to 5 seconds
-        
-        # Add new attributes for autonomous posting
-        self.auto_post_interval = 60  # 30 minutes in seconds
-        self.last_auto_post_time = time.time()
-        self.trending_cache = []
-        self.trending_cache_timeout = 3600  # 1 hour in seconds
-        self.last_cache_update = 0
-        self.auto_post_interval = 1800  # 30 minutes
+        # Initialize settings
+        self.hashtags = []
+        self.check_interval = 60
+        self.cooldown_period = 5
+        self.processed_posts = set()
+        self.processed_dms = set()
         self.last_post_time = time.time()
         self.post_count = 0
-        self.max_daily_posts = 48  # 2 posts per hour for 24 hours
-        self.current_style = PostStyle.ENTERTAINER  # Default style
-        self.replied_dms = set()  # Store IDs of replied DMs
-        self.dm_context_file = "dm_context.json"
-        self._load_dm_context()
-        self.dm_settings = {
-            "enabled": False,
-            "auto_reply": True,
-            "reply_interval": 300
-        }
-        self.like_settings = {
-            "enabled": False,
-            "max_likes_per_hour": 20,
-            "like_probability": 0.7  # 70% chance to like a trending post
-        }
-        self.likes_count = 0
-        self.last_like_reset = time.time()
+        self.last_daily_reset = time.time()
         
-        # Add missing config parameters
+        # Service status tracking
+        self.services_status = {
+            'auto_post': False,
+            'dm': False,
+            'auto_like': False,
+            'hashtag': False
+        }
+        
+        # Settings
+        self.auto_post_settings = {
+            'enabled': True,
+            'interval': 1800,
+            'max_daily_posts': 48
+        }
+        
+        self.dm_settings = {
+            'enabled': False,
+            'auto_reply': True,
+            'reply_interval': 300
+        }
+        
+        self.like_settings = {
+            'enabled': False,
+            'max_likes_per_hour': 20,
+            'like_probability': 0.7
+        }
+        
         self.post_config = {
-            "use_hashtags": True,
-            "max_length": 240,
-            "blacklisted_words": []
+            'max_length': 240,
+            'style': 'entertainer',
+            'use_emojis': True
         }
 
     def _clean_html(self, text: str) -> str:
@@ -211,21 +210,47 @@ class MastodonPlatform:
                     return "✨ Interesting perspective! Thanks for sharing! 🌟"
 
     async def search_hashtag(self, hashtag: str, limit: int = 5) -> List[Dict]:
-        """Search and respond to hashtag posts with rate limiting"""
+        """Search for posts with specific hashtag"""
         try:
-            await self._handle_rate_limit()
+            print(f"🔍 Searching posts with #{hashtag}...")
+            # Remove # if present
             hashtag = hashtag.strip('#')
-            results = self.client.timeline_hashtag(hashtag, limit=limit)
-            formatted_posts = []
             
-            for status in results:
-                post = self._format_post(status)
-                formatted_posts.append(post)
+            # Get posts with hashtag
+            results = []
+            posts = self.client.timeline_hashtag(hashtag)
             
-            return formatted_posts
+            for post in posts[:limit]:
+                try:
+                    # Skip posts we've already processed
+                    if post['id'] in self.processed_posts:
+                        continue
+                        
+                    # Skip our own posts
+                    if post['account']['id'] == self.client.account_verify_credentials()['id']:
+                        continue
+                        
+                    # Extract post info
+                    post_info = {
+                        'id': post['id'],
+                        'content': self._clean_html(post['content']),
+                        'author': post['account']['username'],
+                        'created_at': post['created_at'],
+                        'raw_status': post  # Keep original status for reference
+                    }
+                    
+                    results.append(post_info)
+                    
+                except Exception as e:
+                    print(f"❌ Error processing hashtag result: {str(e)}")
+                    continue
+                    
+            print(f"✅ Found {len(results)} new posts with #{hashtag}")
+            return results
+            
         except Exception as e:
-            print(f"Error searching hashtag {hashtag}: {str(e)}")
-            return [{"error": str(e)}]
+            print(f"❌ Error searching hashtag #{hashtag}: {str(e)}")
+            return []
 
     async def reply_to_post(self, post_id: str, content: str) -> Dict:
         """Post a reply with rate limiting"""
@@ -397,76 +422,165 @@ class MastodonPlatform:
             return None
 
     async def schedule_auto_posts(self):
-        """Main loop for scheduled auto-posting and DM handling"""
-        print("Starting scheduled auto-posting service...")
-        first_run = True
-        while True:
-            try:
-                current_time = time.time()
+        """Main loop for scheduled auto-posting"""
+        print("\n🚀 Starting auto-posting service...")
+        
+        try:
+            # Make an immediate first post if enabled
+            if self.auto_post_settings['enabled']:
+                print("📝 Creating initial post...")
+                post_result = await self.create_scheduled_post()
+                if post_result:
+                    self.last_post_time = time.time()
+                    self.post_count += 1
+                    print(f"✅ Initial post successful! Posts today: {self.post_count}/{self.auto_post_settings['max_daily_posts']}")
+                else:
+                    print("❌ Failed to create initial post, will retry in regular interval")
+
+            # Continue with regular posting schedule
+            while True:
+                try:
+                    current_time = time.time()
+                    
+                    # Reset daily post count at midnight
+                    if self._should_reset_daily_count(current_time):
+                        self.post_count = 0
+                        self.last_daily_reset = current_time
+                        print("🔄 Daily post count reset")
+                    
+                    # Handle auto-posting if enabled
+                    if self.auto_post_settings['enabled']:
+                        # Check if we can post (time interval and daily limit)
+                        if (current_time - self.last_post_time >= self.auto_post_settings['interval'] and 
+                            self.post_count < self.auto_post_settings['max_daily_posts']):
+                            
+                            print("📝 Creating scheduled post...")
+                            post_result = await self.create_scheduled_post()
+                            if post_result:
+                                self.last_post_time = current_time
+                                self.post_count += 1
+                                print(f"✅ Post successful! Posts today: {self.post_count}/{self.auto_post_settings['max_daily_posts']}")
+                            else:
+                                print("❌ Failed to create post, will retry next interval")
+                                await asyncio.sleep(300)  # Wait 5 minutes before retrying
+                        
+                        elif self.post_count >= self.auto_post_settings['max_daily_posts']:
+                            print("⏳ Daily post limit reached, waiting for reset")
+                            await asyncio.sleep(self._time_until_next_reset())
+                    
+                    await asyncio.sleep(60)  # Check every minute
+                    
+                except asyncio.CancelledError:
+                    print("🛑 Auto-posting service stopped")
+                    break
+                except Exception as e:
+                    print(f"❌ Error in auto-posting loop: {str(e)}")
+                    await asyncio.sleep(300)  # Wait 5 minutes on error
+                    
+        except Exception as e:
+            print(f"❌ Error starting auto-posting service: {str(e)}")
+            raise
+
+    def _should_reset_daily_count(self, current_time):
+        """Check if we should reset the daily post count"""
+        current_day = time.strftime("%Y-%m-%d", time.localtime(current_time))
+        last_reset_day = time.strftime("%Y-%m-%d", time.localtime(self.last_daily_reset))
+        return current_day != last_reset_day
+
+    def _time_until_next_reset(self):
+        """Calculate seconds until next day reset (midnight)"""
+        now = time.localtime()
+        seconds_since_midnight = now.tm_hour * 3600 + now.tm_min * 60 + now.tm_sec
+        return 86400 - seconds_since_midnight  # Seconds until midnight
+
+    async def get_trending_topics(self, limit: int = 5) -> List[str]:
+        """Get trending topics by analyzing recent public posts"""
+        try:
+            await self._handle_rate_limit()
+            
+            # Get trending tags directly from Mastodon API
+            trending_tags = self.client.trending_tags()
+            
+            # Fallback to timeline analysis if trending tags API fails
+            if not trending_tags:
+                timeline = self.client.timeline_public(limit=30)
+                hashtag_counts = {}
+                for status in timeline:
+                    tags = status.get('tags', [])
+                    for tag in tags:
+                        tag_name = tag['name'].lower()
+                        hashtag_counts[tag_name] = hashtag_counts.get(tag_name, 0) + 1
                 
-                # Handle regular posts
-                if first_run or current_time - self.last_post_time >= self.auto_post_interval:
-                    if self.post_count < self.max_daily_posts:
-                        await self.create_scheduled_post()
-                        self.last_post_time = current_time
-                        self.post_count += 1
-                        print(f"Auto-post complete. Posts today: {self.post_count}/{self.max_daily_posts}")
-                    first_run = False
-                
-                # Handle DMs if enabled
-                if self.dm_settings["enabled"] and self.dm_settings["auto_reply"]:
-                    if current_time % self.dm_settings["reply_interval"] < 60:
-                        await self.handle_direct_messages()
-                
-                # Handle auto-likes
-                if current_time % 300 < 60:  # Check every 5 minutes
-                    await self.auto_like_trending_posts()
-                
-                await asyncio.sleep(60)  # Check every minute
-                
-            except Exception as e:
-                print(f"Error in auto-posting loop: {str(e)}")
-                await asyncio.sleep(300)
+                trending = sorted(hashtag_counts.items(), 
+                                key=lambda x: x[1], 
+                                reverse=True)[:limit]
+                return [tag[0] for tag in trending]
+            
+            return [tag['name'] for tag in trending_tags[:limit]]
+            
+        except Exception as e:
+            print(f"Error getting trending topics: {str(e)}")
+            return []
 
     async def create_scheduled_post(self):
-        """Create an engaging scheduled post"""
+        """Create an engaging scheduled post with trending topics"""
         try:
-            # Get trending posts for inspiration
-            trending = await self.get_trending_posts(limit=3)
+            print("\n📊 Fetching trending topics...")
+            # Get current trending topics
+            trending_topics = await self.get_trending_topics(limit=3)
             
-            # Generate content based on trending topics
-            prompt = "Create an engaging social media post about "
-            
-            if trending:
-                topics = [post['keywords'] for post in trending if 'keywords' in post]
-                flat_topics = [item for sublist in topics for item in sublist]
-                prompt += f"these trending topics: {', '.join(flat_topics[:5])}"
-            else:
-                prompt += "technology, AI, or digital culture"
+            if trending_topics:
+                topics_str = ', '.join(trending_topics)
+                print(f"📈 Found trending topics: {topics_str}")
+                prompt = f"""
+                Create an engaging social media post about these trending topics: {topics_str}
                 
-            prompt += """
-            Requirements:
-            - Be informative and engaging
-            - Include 2-3 relevant hashtags
-            - Add 1-2 appropriate emojis
-            - Keep it under 240 characters
-            - Make it conversation-starting
-            """
+                Requirements:
+                - Focus on the most interesting aspects
+                - Add valuable insights or perspectives
+                - Include 1-2 relevant hashtags from: {topics_str}
+                - Use 1-2 appropriate emojis
+                - Keep it under {self.post_config['max_length']} characters
+                - Make it conversation-starting
+                """
+            else:
+                # Fallback topics if no trending tags found
+                print("⚠️ No trending topics found, using fallback topics...")
+                topics = ['technology', 'digital culture', 'innovation', 
+                         'future tech', 'AI', 'social media']
+                selected_topics = random.sample(topics, 2)
+                print(f"🎲 Selected topics: {', '.join(selected_topics)}")
+                prompt = f"""
+                Create an engaging social media post about one of these topics: 
+                {', '.join(selected_topics)}
+                
+                Requirements:
+                - Be informative and engaging
+                - Add valuable insights
+                - Include 1-2 relevant hashtags
+                - Use 1-2 appropriate emojis
+                - Keep it under {self.post_config['max_length']} characters
+                - Make it conversation-starting
+                """
             
+            # Generate post content using selected style
+            print("🤖 Generating post content...")
             response = await self.create_styled_post(prompt, self.current_style)
             
             # Post the content
+            print("📤 Posting content...")
             await self._handle_rate_limit()
             status = self.client.status_post(
                 response,
                 visibility="public"
             )
             
-            print(f"\n✅ Auto-posted: {response}")
-            return self._format_post(status)
+            formatted_post = self._format_post(status)
+            print(f"\n✅ Successfully posted: {response}")
+            return formatted_post
             
         except Exception as e:
-            print(f"Error creating scheduled post: {str(e)}")
+            print(f"❌ Error creating scheduled post: {str(e)}")
             return None
 
     async def set_post_style(self, style: str) -> bool:
@@ -674,3 +788,219 @@ class MastodonPlatform:
 
         except Exception as e:
             print(f"Error in auto-like process: {str(e)}")
+
+    async def start_services(self):
+        """Start all automated services"""
+        print("\n🚀 Starting all automated services...")
+        
+        try:
+            # Create tasks for each service
+            tasks = []
+            
+            # Auto-posting service
+            if self.auto_post_settings['enabled']:
+                tasks.append(asyncio.create_task(self.schedule_auto_posts()))
+                self.services_status['auto_post'] = True
+                print("📝 Auto-posting service enabled")
+            
+            # DM service
+            if self.dm_settings['enabled']:
+                tasks.append(asyncio.create_task(self.handle_dm_service()))
+                self.services_status['dm'] = True
+                print("📨 DM service enabled")
+            
+            # Auto-like service
+            if self.like_settings['enabled']:
+                tasks.append(asyncio.create_task(self.handle_auto_likes()))
+                self.services_status['auto_like'] = True
+                print("❤️ Auto-like service enabled")
+            
+            # Hashtag monitoring
+            if self.hashtags:
+                tasks.append(asyncio.create_task(self.monitor_hashtags()))
+                self.services_status['hashtag'] = True
+                print("🔍 Hashtag monitoring enabled")
+            
+            # Wait for all tasks
+            if tasks:
+                await asyncio.gather(*tasks)
+            else:
+                print("⚠️ No services enabled")
+            
+        except Exception as e:
+            print(f"❌ Error in services: {str(e)}")
+            raise
+
+    async def handle_dm_service(self):
+        """Handle DM monitoring and responses"""
+        print("\n📨 Starting DM service...")
+        last_check_time = 0
+        
+        while True:
+            try:
+                if not self.dm_settings["enabled"] or not self.dm_settings["auto_reply"]:
+                    await asyncio.sleep(60)
+                    continue
+                    
+                current_time = time.time()
+                if current_time - last_check_time >= self.dm_settings["reply_interval"]:
+                    print("\n🔍 Checking for new DMs...")
+                    await self.handle_direct_messages()
+                    last_check_time = current_time
+                    
+                await asyncio.sleep(60)  # Check every minute
+                
+            except asyncio.CancelledError:
+                print("🛑 DM service stopped")
+                break
+            except Exception as e:
+                print(f"❌ Error in DM service: {str(e)}")
+                await asyncio.sleep(300)  # Wait 5 minutes on error
+
+    async def handle_auto_likes(self):
+        """Handle auto-liking of posts"""
+        print("\n❤️ Starting auto-like service...")
+        last_like_time = 0
+        hourly_likes = 0
+        last_hour_reset = time.time()
+        
+        while True:
+            try:
+                if not self.like_settings["enabled"]:
+                    await asyncio.sleep(60)
+                    continue
+                
+                current_time = time.time()
+                
+                # Reset hourly counter
+                if current_time - last_hour_reset >= 3600:
+                    hourly_likes = 0
+                    last_hour_reset = current_time
+                    print("🔄 Hourly like count reset")
+                
+                # Check if we can like more posts
+                if hourly_likes >= self.like_settings["max_likes_per_hour"]:
+                    await asyncio.sleep(60)
+                    continue
+                
+                # Get trending posts to like
+                if current_time - last_like_time >= 300:  # Check every 5 minutes
+                    print("\n🔍 Finding posts to like...")
+                    trending_posts = await self.get_trending_posts(limit=10)
+                    
+                    for post in trending_posts:
+                        if hourly_likes >= self.like_settings["max_likes_per_hour"]:
+                            break
+                            
+                        if random.random() < self.like_settings["like_probability"]:
+                            try:
+                                await self._handle_rate_limit()
+                                self.client.status_favourite(post['id'])
+                                hourly_likes += 1
+                                print(f"❤️ Liked post from @{post['author']}")
+                            except Exception as e:
+                                print(f"❌ Error liking post: {str(e)}")
+                                continue
+                    
+                    last_like_time = current_time
+                
+                await asyncio.sleep(60)  # Check every minute
+                
+            except asyncio.CancelledError:
+                print("🛑 Auto-like service stopped")
+                break
+            except Exception as e:
+                print(f"❌ Error in auto-like service: {str(e)}")
+                await asyncio.sleep(300)  # Wait 5 minutes on error
+
+    async def monitor_hashtags(self):
+        """Monitor hashtags and respond to posts"""
+        print("\n🔍 Starting hashtag monitoring service...")
+        processed_posts = set()  # Keep track of processed posts
+        
+        while True:
+            try:
+                if not self.hashtags:
+                    await asyncio.sleep(60)
+                    continue
+                
+                print("\n#️⃣ Checking hashtags:", ", ".join(self.hashtags))
+                for hashtag in self.hashtags:
+                    try:
+                        # Get posts for hashtag
+                        posts = await self.search_hashtag(hashtag)
+                        
+                        for post in posts:
+                            try:
+                                # Skip if already processed
+                                if post['id'] in processed_posts:
+                                    continue
+                                
+                                print(f"\n📝 Processing #{hashtag} post from @{post['author']}")
+                                
+                                # Process the post
+                                result = await self.process_single_post(post)
+                                if result and 'error' not in result:
+                                    processed_posts.add(post['id'])
+                                    print(f"✅ Successfully responded to post from @{post['author']}")
+                                
+                                # Respect cooldown period
+                                await asyncio.sleep(self.cooldown_period)
+                                
+                            except Exception as e:
+                                print(f"❌ Error processing post: {str(e)}")
+                                continue
+                        
+                    except Exception as e:
+                        print(f"❌ Error checking hashtag #{hashtag}: {str(e)}")
+                        continue
+                
+                # Cleanup old processed posts (keep last 1000)
+                if len(processed_posts) > 1000:
+                    processed_posts = set(list(processed_posts)[-1000:])
+                
+                # Wait before next check
+                await asyncio.sleep(self.check_interval)
+                
+            except asyncio.CancelledError:
+                print("🛑 Hashtag monitoring service stopped")
+                break
+            except Exception as e:
+                print(f"❌ Error in hashtag monitoring: {str(e)}")
+                await asyncio.sleep(300)  # Wait 5 minutes on error
+
+    def update_settings(self, settings_type, new_settings):
+        """Update service settings"""
+        try:
+            if settings_type == 'auto_post':
+                self.auto_post_settings.update(new_settings)
+                print(f"✅ Updated auto-post settings: {new_settings}")
+            elif settings_type == 'dm':
+                self.dm_settings.update(new_settings)
+                print(f"✅ Updated DM settings: {new_settings}")
+            elif settings_type == 'like':
+                self.like_settings.update(new_settings)
+                print(f"✅ Updated auto-like settings: {new_settings}")
+            elif settings_type == 'hashtags':
+                self.hashtags = new_settings
+                print(f"✅ Updated hashtags: {new_settings}")
+            elif settings_type == 'post_style':
+                self.post_config.update(new_settings)
+                print(f"✅ Updated post style: {new_settings}")
+            return True
+        except Exception as e:
+            print(f"❌ Error updating {settings_type} settings: {str(e)}")
+            return False
+
+    def get_service_status(self):
+        """Get current status of all services"""
+        return {
+            'services': self.services_status,
+            'settings': {
+                'auto_post': self.auto_post_settings,
+                'dm': self.dm_settings,
+                'like': self.like_settings,
+                'hashtags': self.hashtags,
+                'post_style': self.post_config
+            }
+        }

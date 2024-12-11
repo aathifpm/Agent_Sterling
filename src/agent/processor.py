@@ -13,134 +13,77 @@ class PostProcessor:
         self.processed_posts = set()
         self.processed_mentions = set()
 
+    def update_config(self, config):
+        """Update configuration and platform settings"""
+        self.config = config
+        if self.platform:
+            # Update platform settings
+            self.platform.update_settings('hashtags', config.monitoring.hashtags)
+            self.platform.update_settings('auto_post', {
+                'enabled': config.auto_post_settings.enabled,
+                'interval': config.auto_post_settings.interval,
+                'max_daily_posts': config.auto_post_settings.max_daily_posts
+            })
+            self.platform.update_settings('dm', config.dm_settings)
+            self.platform.update_settings('like', config.like_settings)
+            self.platform.update_settings('post_style', {
+                'max_length': config.response.maxLength,
+                'style': config.response.type,
+                'use_emojis': config.response.useEmojis
+            })
+
     async def start_processing(self):
-        """Start the post processing loop"""
+        """Start the main processing loop"""
         self.is_running = True
-        self.log_info("Starting post processor...")
+        print("\n🚀 Starting Agent Sterling...")
         
-        while self.is_running:
-            try:
-                if not self.platform or not self.config:
-                    await asyncio.sleep(1)
-                    continue
-
-                await self.process_hashtags()
-                await self.process_mentions()
-                
-                self._cleanup_processed_sets()
-                
-                await asyncio.sleep(self.config.monitoring.checkInterval)
-                
-            except Exception as e:
-                self.log_error(f"Processing error: {str(e)}")
-                await asyncio.sleep(5)
-
-    async def process_hashtags(self):
-        """Process posts for each hashtag"""
-        for hashtag in self.config.monitoring.hashtags:
-            try:
-                posts = await self.platform.search_hashtag(hashtag, limit=5)
-                
-                if posts and not "error" in posts[0]:
-                    for post in posts:
-                        if "error" not in post and post['id'] not in self.processed_posts:
-                            await self.process_single_post(post)
-                            self.processed_posts.add(post['id'])
-                        
-            except Exception as e:
-                self.log_error(f"Error processing #{hashtag}: {str(e)}")
-
-    async def process_single_post(self, post: Dict):
-        """Process a single post"""
         try:
-            self.log_info(
-                f"Retrieved post from @{post['author']}", 
-                {
-                    "content": post['content'][:200] + "..." if len(post['content']) > 200 else post['content']
-                }
-            )
+            # Configure platform settings
+            self.update_config(self.config)
             
-            response = await self.platform.generate_entertainment_response(post['content'])
-            
-            reply = await self.platform.reply_to_post(post['id'], response)
-            
-            if "error" not in reply:
-                self.log_success(
-                    f"Responded to @{post['author']}", 
-                    {
-                        "response": response
-                    }
-                )
-                self.responses_sent += 1
-            
-            self.posts_processed += 1
+            # Start all services
+            await self.platform.start_services()
             
         except Exception as e:
-            self.log_error(f"Error processing post: {str(e)}")
+            print(f"❌ Fatal error in processing: {str(e)}")
+            self.is_running = False
+            raise
+        finally:
+            self.is_running = False
+            print("\n👋 Agent Sterling stopped")
 
-    async def process_mentions(self):
-        """Process mentions"""
-        try:
-            mentions = await self.platform.get_mentions(limit=3)
+    def get_status(self):
+        """Get current status of the agent"""
+        if not self.platform:
+            return {
+                "status": "stopped",
+                "posts_processed": 0,
+                "responses_sent": 0,
+                "services": {},
+                "settings": {}
+            }
             
-            for mention in mentions:
-                if "error" not in mention and mention['mention']['id'] not in self.processed_mentions:
-                    self.log_info(
-                        f"Received mention from @{mention['mention']['author']}", 
-                        {
-                            "content": mention['mention']['content'][:200]
-                        }
-                    )
-                    
-                    response = await self.platform.handle_mention(mention['mention'])
-                    if "error" not in response:
-                        self.log_success(
-                            f"Responded to mention from @{mention['mention']['author']}", 
-                            {
-                                "response": response['response']
-                            }
-                        )
-                        self.processed_mentions.add(mention['mention']['id'])
-                    
-        except Exception as e:
-            self.log_error(f"Error processing mentions: {str(e)}")
-
-    def _cleanup_processed_sets(self):
-        """Clean up processed sets to prevent memory growth"""
-        if len(self.processed_posts) > 1000:
-            self.processed_posts = set(list(self.processed_posts)[-1000:])
-        if len(self.processed_mentions) > 1000:
-            self.processed_mentions = set(list(self.processed_mentions)[-1000:])
-
-    def log_info(self, message: str, details: Dict = None):
-        """Log info message"""
-        self._add_log("info", message, details)
-
-    def log_success(self, message: str, details: Dict = None):
-        """Log success message"""
-        self._add_log("success", message, details)
-
-    def log_error(self, message: str, details: Dict = None):
-        """Log error message"""
-        self._add_log("error", message, details)
-
-    def _add_log(self, log_type: str, message: str, details: Dict = None):
-        """Add a log entry"""
-        log_entry = {
-            "timestamp": datetime.now().strftime("%H:%M:%S"),
-            "type": log_type,
-            "message": message,
-            "details": details
+        platform_status = self.platform.get_service_status()
+        return {
+            "status": "running" if self.is_running else "stopped",
+            "posts_processed": self.posts_processed,
+            "responses_sent": self.responses_sent,
+            "services": platform_status['services'],
+            "settings": platform_status['settings']
         }
-        print(f"[{log_entry['timestamp']}] {message}")  # Console debug
-        self.logs.append(log_entry)
-        
-        if len(self.logs) > 100:
-            self.logs = self.logs[-100:]
 
-    def stop(self):
-        """Stop the processor"""
-        self.is_running = False
-        self.log_info("Agent stopped")
-        self.processed_posts.clear()
-        self.processed_mentions.clear()
+    def log_info(self, message):
+        """Add info log entry"""
+        self.logs.append({
+            "timestamp": datetime.now().isoformat(),
+            "type": "info",
+            "message": message
+        })
+
+    def log_error(self, message):
+        """Add error log entry"""
+        self.logs.append({
+            "timestamp": datetime.now().isoformat(),
+            "type": "error",
+            "message": message
+        })

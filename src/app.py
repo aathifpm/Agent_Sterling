@@ -44,7 +44,7 @@ class Filters(BaseModel):
 
 class PostStyleConfig(BaseModel):
     style: str = "entertainer"
-    useEmojis: bool = True
+    postStyleEmojis: bool = True
     useHashtags: bool = True
     maxLength: int = 240
 
@@ -55,6 +55,21 @@ class MastodonCredentials(BaseModel):
     access_token: str
     gemini_api_key: str
 
+class DMConfig(BaseModel):
+    enabled: bool = False
+    auto_reply: bool = True
+    reply_interval: int = 300  # 5 minutes
+
+class LikeConfig(BaseModel):
+    enabled: bool = False
+    max_likes_per_hour: int = 20
+    like_probability: float = 0.7
+
+class AutoPostConfig(BaseModel):
+    enabled: bool = True
+    interval: int = 1800  # 30 minutes in seconds
+    max_daily_posts: int = 48  # 2 posts per hour for 24 hours
+    
 class PlatformConfig(BaseModel):
     platform: str
     credentials: MastodonCredentials
@@ -63,6 +78,9 @@ class PlatformConfig(BaseModel):
     rateLimits: RateLimits
     filters: Filters
     postStyle: PostStyleConfig
+    dm_settings: Optional[DMConfig] = DMConfig()
+    like_settings: Optional[LikeConfig] = LikeConfig()
+    auto_post_settings: Optional[AutoPostConfig] = AutoPostConfig()
 
     class Config:
         validate_assignment = True
@@ -83,27 +101,27 @@ class PlatformConfig(BaseModel):
             raise ValueError('Cooldown period must be between 30 and 3600 seconds')
         return v
 
-class DMConfig(BaseModel):
-    enabled: bool = False
-    auto_reply: bool = True
-    reply_interval: int = 300  # 5 minutes
-
-class LikeConfig(BaseModel):
-    enabled: bool = False
-    max_likes_per_hour: int = 20
-    like_probability: float = 0.7
-
 # Global processor instance
 processor = PostProcessor()
 background_task = None
 
 @app.post("/api/start")
 async def start_agent(config: PlatformConfig):
-    global background_task
+    global background_task, processor
     try:
         print("Starting agent with config:", config.dict())
         
         if config.platform == "mastodon":
+            # Validate credentials
+            if not all([
+                config.credentials.instance_url,
+                config.credentials.client_id,
+                config.credentials.client_secret,
+                config.credentials.access_token,
+                config.credentials.gemini_api_key
+            ]):
+                raise HTTPException(status_code=400, detail="Missing required credentials")
+            
             credentials = {
                 'instance_url': config.credentials.instance_url,
                 'client_id': config.credentials.client_id,
@@ -111,10 +129,17 @@ async def start_agent(config: PlatformConfig):
                 'access_token': config.credentials.access_token,
                 'gemini_api_key': config.credentials.gemini_api_key
             }
-            processor.platform = MastodonPlatform(credentials)
-            print("Mastodon platform initialized")
+            
+            try:
+                platform = MastodonPlatform(credentials)
+                platform.dm_settings = config.dm_settings.dict()
+                platform.like_settings = config.like_settings.dict()
+                platform.auto_post_settings = config.auto_post_settings.dict()
+                processor.platform = platform
+                print("Mastodon platform initialized")
+            except Exception as e:
+                raise HTTPException(status_code=400, detail=f"Failed to initialize Mastodon: {str(e)}")
 
-        # Set config and start processing
         processor.config = config
         
         # Cancel existing task if running
@@ -134,6 +159,9 @@ async def start_agent(config: PlatformConfig):
             "message": "Agent started successfully",
             "logs": processor.logs
         }
+        
+    except HTTPException as he:
+        raise he
     except Exception as e:
         print(f"Error starting agent: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -197,34 +225,60 @@ async def update_post_style(style_config: PostStyleConfig):
 @app.post("/api/update-dm-settings")
 async def update_dm_settings(dm_config: DMConfig):
     try:
-        if processor.platform:
-            processor.platform.dm_settings = {
-                "enabled": dm_config.enabled,
-                "auto_reply": dm_config.auto_reply,
-                "reply_interval": dm_config.reply_interval
-            }
-            return {
-                "status": "success",
-                "message": "DM settings updated",
-                "settings": dm_config.dict()
-            }
-        else:
-            raise HTTPException(status_code=400, detail="Platform not initialized")
+        if not processor or not processor.platform:
+            raise HTTPException(
+                status_code=400, 
+                detail="Agent not initialized. Please start the agent first."
+            )
+            
+        processor.platform.dm_settings = dm_config.dict()
+        return {
+            "status": "success",
+            "message": "DM settings updated",
+            "settings": dm_config.dict()
+        }
+    except HTTPException as he:
+        raise he
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/update-like-settings")
 async def update_like_settings(like_config: LikeConfig):
     try:
-        if processor.platform:
-            processor.platform.like_settings = like_config.dict()
-            return {
-                "status": "success",
-                "message": "Like settings updated",
-                "settings": like_config.dict()
-            }
-        else:
-            raise HTTPException(status_code=400, detail="Platform not initialized")
+        if not processor or not processor.platform:
+            raise HTTPException(
+                status_code=400, 
+                detail="Agent not initialized. Please start the agent first."
+            )
+            
+        processor.platform.like_settings = like_config.dict()
+        return {
+            "status": "success",
+            "message": "Like settings updated",
+            "settings": like_config.dict()
+        }
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/update-auto-post-settings")
+async def update_auto_post_settings(auto_post_config: AutoPostConfig):
+    try:
+        if not processor or not processor.platform:
+            raise HTTPException(
+                status_code=400, 
+                detail="Agent not initialized. Please start the agent first."
+            )
+            
+        processor.platform.auto_post_settings = auto_post_config.dict()
+        return {
+            "status": "success",
+            "message": "Auto-posting settings updated",
+            "settings": auto_post_config.dict()
+        }
+    except HTTPException as he:
+        raise he
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
