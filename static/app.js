@@ -1,3 +1,23 @@
+function showNotification(message, type = 'info') {
+    const notification = document.createElement('div');
+    notification.className = `notification ${type}`;
+    notification.textContent = message;
+    
+    let container = document.querySelector('.notification-container');
+    if (!container) {
+        container = document.createElement('div');
+        container.className = 'notification-container';
+        document.body.appendChild(container);
+    }
+    
+    container.appendChild(notification);
+    
+    setTimeout(() => {
+        notification.classList.add('fade-out');
+        setTimeout(() => notification.remove(), 300);
+    }, 3000);
+}
+
 class AgentController {
     constructor() {
         this.config = {
@@ -140,14 +160,14 @@ class AgentController {
         });
 
         // DM settings
-        document.getElementById('dmEnabled').addEventListener('change', updateDMSettings);
-        document.getElementById('autoReply').addEventListener('change', updateDMSettings);
-        document.getElementById('replyInterval').addEventListener('input', updateDMSettings);
+        document.getElementById('dmEnabled').addEventListener('change', () => this.updateDMSettings());
+        document.getElementById('autoReply').addEventListener('change', () => this.updateDMSettings());
+        document.getElementById('replyInterval').addEventListener('input', () => this.updateDMSettings());
 
         // Like settings
-        document.getElementById('likeEnabled').addEventListener('change', updateLikeSettings);
-        document.getElementById('maxLikesPerHour').addEventListener('input', updateLikeSettings);
-        document.getElementById('likeProbability').addEventListener('input', updateLikeSettings);
+        document.getElementById('likeEnabled').addEventListener('change', () => this.updateLikeSettings());
+        document.getElementById('maxLikesPerHour').addEventListener('input', () => this.updateLikeSettings());
+        document.getElementById('likeProbability').addEventListener('input', () => this.updateLikeSettings());
     }
 
     togglePlatform(platform) {
@@ -526,6 +546,60 @@ class AgentController {
             statusText.textContent = 'Stopped';
         }
     }
+
+    async updateDMSettings() {
+        const dmConfig = {
+            enabled: document.getElementById('dmEnabled').checked,
+            auto_reply: document.getElementById('autoReply').checked,
+            reply_interval: parseInt(document.getElementById('replyInterval').value)
+        };
+
+        try {
+            const response = await fetch(`${this.baseUrl}/update-dm-settings`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(dmConfig)
+            });
+
+            const data = await response.json();
+            if (response.ok) {
+                showNotification('DM settings updated successfully', 'success');
+            } else {
+                showNotification('Error updating DM settings', 'error');
+            }
+        } catch (error) {
+            showNotification('Error connecting to server', 'error');
+        }
+    }
+
+    async updateLikeSettings() {
+        const likeConfig = {
+            enabled: document.getElementById('likeEnabled').checked,
+            max_likes_per_hour: parseInt(document.getElementById('maxLikesPerHour').value),
+            like_probability: parseInt(document.getElementById('likeProbability').value) / 100
+        };
+
+        try {
+            const response = await fetch(`${this.baseUrl}/update-like-settings`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(likeConfig)
+            });
+
+            const data = await response.json();
+            if (response.ok) {
+                showNotification('Like settings updated successfully', 'success');
+            } else {
+                showNotification('Error updating like settings', 'error');
+            }
+        } catch (error) {
+            showNotification('Error connecting to server', 'error');
+        }
+    }
 }
 
 // Initialize the controller when the page loads
@@ -554,60 +628,6 @@ async function updatePostStyle() {
             showNotification('Style updated successfully', 'success');
         } else {
             showNotification('Error updating style', 'error');
-        }
-    } catch (error) {
-        showNotification('Error connecting to server', 'error');
-    }
-}
-
-async function updateDMSettings() {
-    const dmConfig = {
-        enabled: document.getElementById('dmEnabled').checked,
-        auto_reply: document.getElementById('autoReply').checked,
-        reply_interval: parseInt(document.getElementById('replyInterval').value)
-    };
-
-    try {
-        const response = await fetch('/api/update-dm-settings', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(dmConfig)
-        });
-
-        const data = await response.json();
-        if (response.ok) {
-            showNotification('DM settings updated successfully', 'success');
-        } else {
-            showNotification('Error updating DM settings', 'error');
-        }
-    } catch (error) {
-        showNotification('Error connecting to server', 'error');
-    }
-}
-
-async function updateLikeSettings() {
-    const likeConfig = {
-        enabled: document.getElementById('likeEnabled').checked,
-        max_likes_per_hour: parseInt(document.getElementById('maxLikesPerHour').value),
-        like_probability: parseInt(document.getElementById('likeProbability').value) / 100
-    };
-
-    try {
-        const response = await fetch('/api/update-like-settings', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(likeConfig)
-        });
-
-        const data = await response.json();
-        if (response.ok) {
-            showNotification('Like settings updated successfully', 'success');
-        } else {
-            showNotification('Error updating like settings', 'error');
         }
     } catch (error) {
         showNotification('Error connecting to server', 'error');
