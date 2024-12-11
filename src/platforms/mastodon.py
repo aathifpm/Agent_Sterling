@@ -30,12 +30,23 @@ class PostStyle:
 
 class MastodonPlatform:
     def __init__(self, credentials):
+        # Initialize Mastodon client
         self.client = Mastodon(
             client_id=credentials['client_id'],
             client_secret=credentials['client_secret'],
             access_token=credentials['access_token'],
             api_base_url=credentials['instance_url']
         )
+        
+        # Initialize Gemini model
+        if 'gemini_api_key' not in credentials:
+            raise ValueError("Gemini API key is required")
+        genai.configure(api_key=credentials['gemini_api_key'])
+        try:
+            self.model = genai.GenerativeModel('gemini-1.5-flash-latest')
+            self.chat = self.model.start_chat(history=[])
+        except Exception as e:
+            raise Exception(f"Failed to initialize Gemini model: {str(e)}")
         
         # Initialize settings
         self.hashtags = []
@@ -46,6 +57,15 @@ class MastodonPlatform:
         self.last_post_time = time.time()
         self.post_count = 0
         self.last_daily_reset = time.time()
+        
+        # Initialize rate limiting attributes
+        self.last_request_time = time.time()
+        self.request_count = 0
+        self.max_requests_per_minute = 30
+        
+        # Initialize auto-like attributes
+        self.last_like_reset = time.time()
+        self.likes_count = 0
         
         # Service status tracking
         self.services_status = {
@@ -77,8 +97,21 @@ class MastodonPlatform:
         self.post_config = {
             'max_length': 240,
             'style': 'entertainer',
-            'use_emojis': True
+            'use_emojis': True,
+            'use_hashtags': True
         }
+        
+        # Initialize current style
+        self.current_style = PostStyle.ENTERTAINER
+        
+        # Initialize DM context file path
+        self.dm_context_file = 'dm_context.json'
+        self.replied_dms = set()
+        self._load_dm_context()
+        
+        # Initialize last auto post time
+        self.last_auto_post_time = time.time()
+        self.auto_post_interval = self.auto_post_settings['interval']
 
     def _clean_html(self, text: str) -> str:
         """Remove HTML tags and clean up text"""
