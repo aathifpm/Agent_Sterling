@@ -5,6 +5,8 @@ from typing import Dict, List, Optional
 from datetime import datetime
 import asyncio
 import os
+import json
+from pathlib import Path
 from dotenv import load_dotenv
 from src.platforms.mastodon import MastodonPlatform
 from src.agent.processor import PostProcessor
@@ -105,6 +107,44 @@ class PlatformConfig(BaseModel):
 processor = PostProcessor()
 background_task = None
 
+# Add data directory configuration
+DATA_DIR = os.environ.get('DATA_DIR', '/opt/agent/data')
+LOGS_FILE = os.path.join(DATA_DIR, 'agent_logs.json')
+
+# Ensure data directory exists
+Path(DATA_DIR).mkdir(parents=True, exist_ok=True)
+
+# Load existing logs if any
+def load_logs():
+    try:
+        if os.path.exists(LOGS_FILE):
+            with open(LOGS_FILE, 'r') as f:
+                return json.load(f)
+    except Exception as e:
+        print(f"Error loading logs: {str(e)}")
+    return []
+
+# Save logs to persistent storage
+def save_logs(logs):
+    try:
+        with open(LOGS_FILE, 'w') as f:
+            json.dump(logs, f)
+    except Exception as e:
+        print(f"Error saving logs: {str(e)}")
+
+# Initialize logs from persistent storage
+if hasattr(processor, 'logs'):
+    processor.logs = load_logs()
+
+# Health check endpoint
+@app.get("/api/health")
+async def health_check():
+    return {
+        "status": "healthy",
+        "timestamp": datetime.now().isoformat(),
+        "version": "1.0.0"
+    }
+
 @app.post("/api/start")
 async def start_agent(config: PlatformConfig):
     global background_task, processor
@@ -196,6 +236,9 @@ async def stop_agent():
 async def get_status():
     try:
         status = processor.get_status()
+        # Save updated logs
+        if hasattr(processor, 'logs'):
+            save_logs(processor.logs)
         return status
     except Exception as e:
         print(f"Error in status check: {str(e)}")

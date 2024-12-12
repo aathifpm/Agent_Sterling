@@ -1,10 +1,35 @@
 services:
+  # Backend Service
   - type: web
-    name: agent-sterling
+    name: agent-sterling-backend
     env: python
     buildCommand: pip install -r requirements.txt
     startCommand: python -m uvicorn src.app:app --host 0.0.0.0 --port $PORT
     envVars:
       - key: PYTHON_VERSION
         value: 3.10.0
-    autoDeploy: true 
+      - key: ENVIRONMENT
+        value: production
+      - key: DATA_DIR
+        value: /opt/agent/data
+    healthCheckPath: /api/health
+    autoDeploy: true
+    disk:
+      name: agent-data
+      mountPath: /opt/agent/data
+      sizeGB: 1
+
+  # Frontend Service
+  - type: web
+    name: agent-sterling-frontend
+    env: static
+    buildCommand: |
+      npm install -g http-server
+      mkdir -p dist
+      cp -r static/* dist/
+    startCommand: http-server ./dist -p $PORT --cors
+    staticPublishPath: ./dist
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: 16.x
