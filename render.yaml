@@ -1,22 +1,21 @@
 services:
-  # Backend API Service
+  # Combined Service (Backend + Frontend)
   - type: web
-    name: agent-sterling-api
+    name: agent-sterling
     env: python
     buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn api.index:app --host 0.0.0.0 --port $PORT
+    startCommand: python -m uvicorn api.index:app --host 0.0.0.0 --port $PORT
     envVars:
       - key: PYTHON_VERSION
         value: 3.12.0
-      - key: PORT
-        value: 10000
-
-  # Static Frontend Service
-  - type: static
-    name: agent-sterling-static
-    buildCommand: echo "Static files ready"
     staticPublishPath: ./static
     routes:
+      - type: rewrite
+        source: /api/*
+        destination: /api/$1
+      - type: rewrite
+        source: /health
+        destination: /health
       - type: rewrite
         source: /*
         destination: /index.html 
