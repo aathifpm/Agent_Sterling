@@ -54,13 +54,11 @@
                     keywords: [],
                     blacklist: []
                 },
-                // Add DM settings
                 dm_settings: {
                     enabled: false,
                     auto_reply: true,
                     reply_interval: 300
                 },
-                // Add Like settings
                 like_settings: {
                     enabled: false,
                     max_likes_per_hour: 20,
@@ -81,7 +79,7 @@
                 responsesSent: 0
             };
             
-            this.baseUrl = 'http://localhost:8000/api';
+            this.baseUrl = window.location.origin + '/api';
             this.initializeEventListeners();
             this.loadConfiguration();
             this.updateMetricsDisplay();
