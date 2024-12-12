@@ -9,6 +9,7 @@ from src.platforms.mastodon import MastodonPlatform
 from src.agent.processor import PostProcessor
 from pydantic import BaseModel, validator
 import time
+from fastapi.responses import JSONResponse
 
 app = FastAPI()
 
@@ -382,93 +383,118 @@ async def get_status():
 
 @app.post("/api/update-style")
 async def update_post_style(style_config: PostStyleConfig):
+    """Update post style with proper JSON response"""
     try:
         if processor.platform:
             success = await processor.platform.set_post_style(style_config.style)
             if success:
-                return {
-                    "status": "success",
-                    "message": f"Post style updated to {style_config.style}",
-                    "current_style": style_config.style
-                }
+                return JSONResponse(
+                    status_code=200,
+                    content={
+                        "status": "success",
+                        "message": f"Post style updated to {style_config.style}",
+                        "current_style": style_config.style
+                    }
+                )
             else:
-                raise HTTPException(status_code=400, detail="Invalid style option")
+                return JSONResponse(
+                    status_code=400,
+                    content={"status": "error", "detail": "Invalid style option"}
+                )
         else:
-            raise HTTPException(status_code=400, detail="Platform not initialized")
+            return JSONResponse(
+                status_code=400,
+                content={"status": "error", "detail": "Platform not initialized"}
+            )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        return JSONResponse(
+            status_code=500,
+            content={"status": "error", "detail": str(e)}
+        )
 
 @app.post("/api/update-dm-settings")
 async def update_dm_settings(dm_config: DMConfig):
+    """Update DM settings with proper JSON response"""
     try:
         if not processor or not processor.platform:
-            raise HTTPException(
-                status_code=400, 
-                detail="Agent not initialized. Please start the agent first."
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "status": "error",
+                    "detail": "Agent not initialized. Please start the agent first."
+                }
             )
             
         processor.platform.dm_settings = dm_config.dict()
-        return {
-            "status": "success",
-            "message": "DM settings updated",
-            "settings": dm_config.dict()
-        }
-    except HTTPException as he:
-        raise he
+        return JSONResponse(
+            status_code=200,
+            content={
+                "status": "success",
+                "message": "DM settings updated",
+                "settings": dm_config.dict()
+            }
+        )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        return JSONResponse(
+            status_code=500,
+            content={"status": "error", "detail": str(e)}
+        )
 
 @app.post("/api/update-like-settings")
 async def update_like_settings(like_config: LikeConfig):
+    """Update like settings with proper JSON response"""
     try:
         if not processor or not processor.platform:
-            raise HTTPException(
-                status_code=400, 
-                detail="Agent not initialized. Please start the agent first."
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "status": "error",
+                    "detail": "Agent not initialized. Please start the agent first."
+                }
             )
             
         processor.platform.like_settings = like_config.dict()
-        return {
-            "status": "success",
-            "message": "Like settings updated",
-            "settings": like_config.dict()
-        }
-    except HTTPException as he:
-        raise he
+        return JSONResponse(
+            status_code=200,
+            content={
+                "status": "success",
+                "message": "Like settings updated",
+                "settings": like_config.dict()
+            }
+        )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        return JSONResponse(
+            status_code=500,
+            content={"status": "error", "detail": str(e)}
+        )
 
 @app.post("/api/update-auto-post-settings")
 async def update_auto_post_settings(auto_post_config: AutoPostConfig):
+    """Update auto-post settings with proper JSON response"""
     try:
         if not processor or not processor.platform:
-            raise HTTPException(
-                status_code=400, 
-                detail="Agent not initialized. Please start the agent first."
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "status": "error",
+                    "detail": "Agent not initialized. Please start the agent first."
+                }
             )
-        
-        # Validate and update settings
-        try:
-            # Convert to dict and update platform settings
-            settings_dict = auto_post_config.dict()
-            processor.platform.update_settings('auto_post', settings_dict)
             
-            # Update processor config if it exists
-            if processor.config and processor.config.auto_post_settings:
-                processor.config.auto_post_settings = auto_post_config
-            
-            return {
+        processor.platform.update_settings('auto_post', auto_post_config.dict())
+        return JSONResponse(
+            status_code=200,
+            content={
                 "status": "success",
                 "message": "Auto-posting settings updated",
-                "settings": settings_dict
+                "settings": auto_post_config.dict()
             }
-        except ValueError as ve:
-            raise HTTPException(status_code=400, detail=str(ve))
-            
-    except HTTPException as he:
-        raise he
+        )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        return JSONResponse(
+            status_code=500,
+            content={"status": "error", "detail": str(e)}
+        )
 
 if __name__ == "__main__":
     import uvicorn
