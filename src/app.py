@@ -8,6 +8,7 @@ import os
 from src.platforms.mastodon import MastodonPlatform
 from src.agent.processor import PostProcessor
 from pydantic import BaseModel, validator
+import time
 
 app = FastAPI()
 
@@ -108,21 +109,51 @@ processed_mentions: Set[str] = set()
 last_trending_post_time = 0
 
 async def process_mention(platform, mention):
-    """Process a single mention with duplicate checking"""
+    """Process a single mention with context-aware handling"""
     mention_id = mention['id']
     if mention_id not in processed_mentions:
         try:
+            # Get conversation context
+            context = mention.get('context', {})
+            conversation = context.get('conversation', [])
+            
+            # Process the mention with context
             response = await platform.handle_mention(mention)
-            if response and 'error' not in response:
+            
+            if response and response.get('status') == 'success':
                 processed_mentions.add(mention_id)
                 print(f"Successfully processed mention {mention_id}")
+                if response.get('context_used'):
+                    print(f"Used conversation context: {len(conversation)} previous messages")
                 return True
+                
         except Exception as e:
             print(f"Error processing mention {mention_id}: {str(e)}")
     return False
 
+async def check_mentions(platform):
+    """Check and process new mentions"""
+    try:
+        mentions = await platform.get_mentions(limit=5)
+        
+        for mention in mentions:
+            try:
+                if mention['id'] not in processed_mentions:
+                    await process_mention(platform, mention)
+                    # Add small delay between processing mentions
+                    await asyncio.sleep(2)
+            except Exception as e:
+                print(f"Error processing mention: {str(e)}")
+                continue
+                
+    except Exception as e:
+        print(f"Error checking mentions: {str(e)}")
+        return False
+    
+    return True
+
 async def create_trending_post(platform):
-    """Create a trending post with duplicate checking and improved content"""
+    """Create a trending post with enhanced context awareness and improved content generation"""
     global last_trending_post_time
     current_time = datetime.now().timestamp()
     
@@ -131,31 +162,70 @@ async def create_trending_post(platform):
         return False
         
     try:
-        # Try improved method first
-        result = await platform.create_trending_post_improved()
-        if result and 'error' not in result:
-            post_id = result['id']
-            if post_id not in processed_posts:
-                processed_posts.add(post_id)
-                last_trending_post_time = current_time
-                print(f"Successfully created improved trending post {post_id}")
-                return True
+        # Get trending topics with enhanced context
+        topics = await platform.get_trending_topics_with_context()
+        if not topics:
+            print("No trending topics found at the moment")
+            return False
+
+        # Sort topics by engagement and trend
+        topics.sort(key=lambda x: (
+            x['context']['engagement_level'] * (2 if x['context']['engagement_trend'] == 'rising' else 1),
+            x['context']['post_frequency']
+        ), reverse=True)
         
-        # Fallback to original method if improved method fails
-        trending_posts = await platform.get_trending_posts(limit=5)
-        for post in trending_posts:
-            post_id = post['id']
-            if post_id not in processed_posts:
-                result = await platform.process_single_post(post)
-                if result and 'error' not in result:
-                    processed_posts.add(post_id)
-                    last_trending_post_time = current_time
-                    print(f"Successfully created trending post from {post_id} (fallback)")
-                    return True
-                break
+        for topic in topics:
+            try:
+                # Skip topics with predominantly negative sentiment
+                if topic['context']['sentiment'] == 'negative':
+                    continue
+                    
+                # Generate content with enhanced context
+                content = await platform.create_trending_content(
+                    topic['tag'],
+                    topic['context']
+                )
+                
+                if content:
+                    # Post during active hours if possible
+                    active_hours = topic['context'].get('active_hours', [])
+                    current_hour = datetime.now().hour
+                    
+                    if not active_hours or current_hour in active_hours:
+                        post = platform.client.status_post(
+                            content,
+                            visibility="public"
+                        )
+                        
+                        if post:
+                            post_id = post['id']
+                            if post_id not in processed_posts:
+                                processed_posts.add(post_id)
+                                last_trending_post_time = current_time
+                                print(f"Successfully created enhanced trending post about {topic['tag']}")
+                                
+                                # Track engagement for future reference
+                                platform.processed_trending_topics[topic['tag']] = {
+                                    'last_used': current_time,
+                                    'engagement_level': topic['context']['engagement_level'],
+                                    'sentiment': topic['context']['sentiment']
+                                }
+                                
+                                return True
+                    else:
+                        print(f"Skipping post for {topic['tag']} - outside active hours")
+                        continue
+                        
+            except Exception as e:
+                print(f"Error creating post for topic {topic['tag']}: {str(e)}")
+                continue
+        
+        print("No suitable topics found for posting at this time")
+        return False
+        
     except Exception as e:
-        print(f"Error creating trending post: {str(e)}")
-    return False
+        print(f"Error in trending post creation: {str(e)}")
+        return False
 
 async def monitor_platform(platform):
     """Main monitoring function for the platform"""
@@ -376,13 +446,25 @@ async def update_auto_post_settings(auto_post_config: AutoPostConfig):
                 status_code=400, 
                 detail="Agent not initialized. Please start the agent first."
             )
+        
+        # Validate and update settings
+        try:
+            # Convert to dict and update platform settings
+            settings_dict = auto_post_config.dict()
+            processor.platform.update_settings('auto_post', settings_dict)
             
-        processor.platform.auto_post_settings = auto_post_config.dict()
-        return {
-            "status": "success",
-            "message": "Auto-posting settings updated",
-            "settings": auto_post_config.dict()
-        }
+            # Update processor config if it exists
+            if processor.config and processor.config.auto_post_settings:
+                processor.config.auto_post_settings = auto_post_config
+            
+            return {
+                "status": "success",
+                "message": "Auto-posting settings updated",
+                "settings": settings_dict
+            }
+        except ValueError as ve:
+            raise HTTPException(status_code=400, detail=str(ve))
+            
     except HTTPException as he:
         raise he
     except Exception as e:

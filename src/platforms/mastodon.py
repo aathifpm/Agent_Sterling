@@ -291,14 +291,14 @@ class MastodonPlatform:
             print(f"❌ Error searching hashtag #{hashtag}: {str(e)}")
             return []
 
-    async def reply_to_post(self, post_id: str, content: str) -> Dict:
-        """Post a reply with rate limiting"""
+    async def reply_to_post(self, post_id: str, content: str, visibility: str = "public") -> Dict:
+        """Post a reply with rate limiting and visibility control"""
         try:
             await self._handle_rate_limit()
             status = self.client.status_post(
                 content,
                 in_reply_to_id=post_id,
-                visibility="public"
+                visibility=visibility
             )
             return self._format_post(status)
         except Exception as e:
@@ -328,7 +328,7 @@ class MastodonPlatform:
             return {"error": str(e)}
 
     async def get_mentions(self, limit: int = 3) -> List[Dict]:
-        """Get recent mentions with rate limiting"""
+        """Get recent mentions with rate limiting and context"""
         try:
             await self._handle_rate_limit()
             mentions = self.client.notifications(
@@ -336,31 +336,88 @@ class MastodonPlatform:
                 limit=limit
             )
             
-            responses = []
+            formatted_mentions = []
             for mention in mentions:
-                mention_data = self._format_post(mention['status'])
-                response = await self.handle_mention(mention['status'])
-                responses.append({
-                    "mention": mention_data,
-                    "response": response
-                })
-                                                                                                                                                                                                                        
-            return responses
+                try:
+                    # Format the mention with context
+                    mention_data = self._format_post(mention['status'])
+                    mention_data['context'] = {
+                        'in_reply_to_id': mention['status'].get('in_reply_to_id'),
+                        'in_reply_to_account_id': mention['status'].get('in_reply_to_account_id'),
+                        'visibility': mention['status'].get('visibility', 'public'),
+                        'language': mention['status'].get('language', 'en'),
+                        'created_at': mention['created_at']
+                    }
+                    
+                    # Get conversation context if available
+                    if mention_data['context']['in_reply_to_id']:
+                        try:
+                            context = self.client.status_context(mention_data['context']['in_reply_to_id'])
+                            mention_data['context']['conversation'] = [
+                                self._clean_html(s['content']) for s in context['ancestors'][-2:]
+                            ]
+                        except Exception as e:
+                            print(f"Error getting conversation context: {str(e)}")
+                            mention_data['context']['conversation'] = []
+                    
+                    formatted_mentions.append(mention_data)
+                    
+                except Exception as e:
+                    print(f"Error formatting mention: {str(e)}")
+                    continue
+                    
+            return formatted_mentions
         except Exception as e:
             print(f"Error getting mentions: {str(e)}")
-            return [{"error": str(e)}]
+            return []
 
     async def handle_mention(self, mention: Dict) -> Dict:
-        """Handle mentions with rate limiting"""
+        """Handle mentions with context-aware responses"""
         try:
-            post = self._format_post(mention)
-            response = await self.generate_entertainment_response(post['content'])
-            reply = await self.reply_to_post(post['id'], response)
+            # Extract mention data and context
+            content = mention['content']
+            context = mention.get('context', {})
+            conversation = context.get('conversation', [])
+            
+            # Analyze the mention content and context
+            is_question = any(word in content.lower() for word in ['?', 'how', 'what', 'why', 'when', 'where', 'who'])
+            is_greeting = any(word in content.lower() for word in ['hi', 'hello', 'hey', 'greetings'])
+            has_conversation = len(conversation) > 0
+            
+            # Build prompt based on analysis
+            prompt_parts = [
+                f"Create a response to this mention: \"{content}\"",
+                "\nContext:",
+                f"- Previous messages: {' -> '.join(conversation)}" if has_conversation else "- No previous context",
+                f"- Type: {'Question' if is_question else 'Greeting' if is_greeting else 'Statement'}",
+                "\nRequirements:",
+                "1. Be engaging and natural",
+                "2. Match the conversation tone",
+                "3. If it's a question, provide a helpful answer",
+                "4. If it's a greeting, respond warmly",
+                "5. Reference previous context if relevant",
+                "6. Keep it concise and clear",
+                f"7. Stay under {self.post_config.get('max_length', 240)} characters",
+                "8. Add 1-2 relevant emojis"
+            ]
+            
+            prompt = "\n".join(prompt_parts)
+            
+            # Generate and format response
+            response = await self.generate_entertainment_response(prompt)
+            
+            # Post the reply with appropriate visibility
+            reply = await self.reply_to_post(
+                mention['id'], 
+                response,
+                visibility=context.get('visibility', 'public')
+            )
             
             return {
                 "status": "success",
                 "response": response,
-                "reply": reply
+                "reply": reply,
+                "context_used": bool(conversation)
             }
         except Exception as e:
             print(f"Error handling mention: {str(e)}")
@@ -504,7 +561,7 @@ class MastodonPlatform:
                                 await asyncio.sleep(300)  # Wait 5 minutes before retrying
                         
                         elif self.post_count >= self.auto_post_settings['max_daily_posts']:
-                            print("⏳ Daily post limit reached, waiting for reset")
+                            print(" Daily post limit reached, waiting for reset")
                             await asyncio.sleep(self._time_until_next_reset())
                     
                     await asyncio.sleep(60)  # Check every minute
@@ -1175,19 +1232,47 @@ class MastodonPlatform:
                         continue
                 
                 # Get recent posts for context
-                recent_posts = await self.search_hashtag(tag['name'], limit=3)
+                recent_posts = await self.search_hashtag(tag['name'], limit=5)
                 
                 # Extract key information from recent posts
+                engagement_metrics = []
+                peak_hours = set()
+                sentiment_counts = {'positive': 0, 'neutral': 0, 'negative': 0}
+                
+                for post in recent_posts:
+                    # Calculate engagement score
+                    engagement = post.get('favourites_count', 0) + post.get('reblogs_count', 0)
+                    engagement_metrics.append(engagement)
+                    
+                    # Track posting hours
+                    post_hour = datetime.fromisoformat(post['created_at']).hour
+                    peak_hours.add(post_hour)
+                    
+                    # Simple sentiment analysis based on emojis and keywords
+                    content = post['content'].lower()
+                    if any(word in content for word in ['❤️', '😊', 'love', 'great', 'awesome']):
+                        sentiment_counts['positive'] += 1
+                    elif any(word in content for word in ['😢', '😠', 'bad', 'hate', 'terrible']):
+                        sentiment_counts['negative'] += 1
+                    else:
+                        sentiment_counts['neutral'] += 1
+                
+                # Calculate engagement statistics
+                avg_engagement = sum(engagement_metrics) / len(engagement_metrics) if engagement_metrics else 0
+                max_engagement = max(engagement_metrics) if engagement_metrics else 0
+                
+                # Determine dominant sentiment
+                dominant_sentiment = max(sentiment_counts.items(), key=lambda x: x[1])[0]
+                
                 context = {
                     'recent_discussions': [post['content'] for post in recent_posts],
-                    'engagement_level': sum(
-                        post.get('favourites_count', 0) + post.get('reblogs_count', 0) 
-                        for post in recent_posts
-                    ),
-                    'active_hours': len(set(
-                        datetime.fromisoformat(post['created_at']).hour 
-                        for post in recent_posts
-                    ))
+                    'engagement_level': avg_engagement,
+                    'peak_engagement': max_engagement,
+                    'active_hours': sorted(list(peak_hours)),
+                    'sentiment': dominant_sentiment,
+                    'engagement_trend': 'rising' if max_engagement > avg_engagement * 1.5 else 'stable',
+                    'post_frequency': len(recent_posts),
+                    'sentiment_distribution': sentiment_counts
                 }
                 
                 enriched_topics.append({
