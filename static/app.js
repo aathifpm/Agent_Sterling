@@ -23,7 +23,7 @@
             // Get backend URL based on environment
             const currentDomain = window.location.hostname;
             this.baseUrl = currentDomain.includes('onrender.com')
-                ? 'https://agent-sterling-backend.onrender.com/api'
+                ? `https://${currentDomain.replace('agent-sterling-frontend', 'agent-sterling-backend')}/api`
                 : 'http://localhost:8000/api';
 
             this.config = {

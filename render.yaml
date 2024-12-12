@@ -20,16 +20,14 @@ services:
       sizeGB: 1
 
   # Frontend Service
-  - type: web
+  - type: static
     name: agent-sterling-frontend
-    env: static
     buildCommand: |
-      npm install -g http-server
       mkdir -p dist
       cp -r static/* dist/
-    startCommand: http-server ./dist -p $PORT --cors
     staticPublishPath: ./dist
     autoDeploy: true
-    envVars:
-      - key: NODE_VERSION
-        value: 16.x
+    headers:
+      - path: /*
+        name: Access-Control-Allow-Origin
+        value: "*"
