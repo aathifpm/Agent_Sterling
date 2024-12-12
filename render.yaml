@@ -16,27 +16,18 @@ services:
         name: Access-Control-Allow-Origin
         value: "*"
     routes:
-      # API routes first
       - type: rewrite
         source: /api/*
         destination: /api/$1
-      # Static file routes
       - type: rewrite
         source: /static/*
         destination: /static/$1
       - type: rewrite
-        source: /*.js
-        destination: /app.js
-      - type: rewrite
-        source: /*.css
-        destination: /styles.css
-      - type: rewrite
-        source: /*.jpg
-        destination: /sterling.jpg
-      - type: rewrite
         source: /health
-        destination: /api/health
-      # SPA fallback
+        destination: /health
+      - type: rewrite
+        source: /*.(js|css|jpg|png|ico)
+        destination: /$1
       - type: rewrite
         source: /*
         destination: /index.html 

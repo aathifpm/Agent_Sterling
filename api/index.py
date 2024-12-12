@@ -2,12 +2,10 @@ import sys
 import os
 from pathlib import Path
 import logging
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
-from fastapi.exceptions import RequestValidationError
-from starlette.exceptions import HTTPException as StarletteHTTPException
 from datetime import datetime
 
 # Configure logging
@@ -40,38 +38,6 @@ app.add_middleware(
 # Mount static files with custom configuration
 app.mount("/static", StaticFiles(directory="static", html=True), name="static")
 
-# Error handlers
-@app.exception_handler(StarletteHTTPException)
-async def http_exception_handler(request: Request, exc: StarletteHTTPException):
-    if request.url.path.startswith("/api/"):
-        return JSONResponse(
-            status_code=exc.status_code,
-            content={"detail": str(exc.detail)}
-        )
-    if exc.status_code == 404:
-        return FileResponse('static/index.html')
-    return JSONResponse(
-        status_code=exc.status_code,
-        content={"detail": str(exc.detail)}
-    )
-
-@app.exception_handler(RequestValidationError)
-async def validation_exception_handler(request: Request, exc: RequestValidationError):
-    return JSONResponse(
-        status_code=422,
-        content={"detail": exc.errors()}
-    )
-
-@app.exception_handler(Exception)
-async def general_exception_handler(request: Request, exc: Exception):
-    logger.error(f"General error: {str(exc)}", exc_info=True)
-    if request.url.path.startswith("/api/"):
-        return JSONResponse(
-            status_code=500,
-            content={"detail": "Internal server error"}
-        )
-    return FileResponse('static/index.html')
-
 try:
     # Import the main application routes
     from src.app import app as main_app
@@ -82,15 +48,19 @@ except Exception as e:
     # Continue running even if main app import fails
     pass
 
+@app.exception_handler(404)
+async def custom_404_handler(request, exc):
+    if request.url.path.startswith("/static/"):
+        return JSONResponse(
+            status_code=404,
+            content={"message": f"File not found: {request.url.path}"}
+        )
+    return FileResponse('static/index.html')
+
 # Serve index.html for the root path
 @app.get("/")
 async def read_root():
     return FileResponse('static/index.html')
-
-# API health check endpoint
-@app.get("/api/health")
-async def health_check():
-    return {"status": "healthy", "timestamp": str(datetime.now())}
 
 # Serve static files directly
 @app.get("/styles.css")
@@ -103,4 +73,9 @@ async def get_js():
 
 @app.get("/sterling.jpg")
 async def get_image():
-    return FileResponse('static/sterling.jpg', media_type='image/jpeg') 
+    return FileResponse('static/sterling.jpg', media_type='image/jpeg')
+
+# Health check endpoint
+@app.get("/health")
+async def health_check():
+    return {"status": "healthy", "timestamp": str(datetime.now())} 
