@@ -389,19 +389,26 @@ class MastodonPlatform:
                 await asyncio.sleep(300)  # Wait 5 minutes on error
 
     async def get_trending_posts(self, limit: int = 10) -> List[Dict]:
-        """Get trending posts from the instance"""
+        """Get trending posts from the instance with enhanced error handling and rate limiting"""
         try:
             await self._handle_rate_limit()
             trending = self.client.trending_tags()
             posts = []
             
-            for tag in trending[:5]:  # Use top 5 trending tags
-                results = await self.search_hashtag(tag['name'], limit=2)
-                posts.extend(results)
+            # Get posts from top trending tags with better error handling
+            for tag in trending[:5]:
+                try:
+                    results = await self.search_hashtag(tag['name'], limit=2)
+                    if results:
+                        posts.extend(results)
+                except Exception as tag_error:
+                    print(f"Error fetching posts for tag {tag['name']}: {str(tag_error)}")
+                    continue
             
-            # Sort by engagement (favorites + reblogs)
-            sorted_posts = sorted(posts, 
-                key=lambda x: (x.get('favourites_count', 0) + x.get('reblogs_count', 0)), 
+            # Enhanced sorting with fallback for missing metrics
+            sorted_posts = sorted(posts,
+                key=lambda x: (x.get('favourites_count', 0) + x.get('reblogs_count', 0) + 
+                             x.get('replies_count', 0)),
                 reverse=True)
             
             return sorted_posts[:limit]
@@ -410,48 +417,141 @@ class MastodonPlatform:
             return []
 
     async def create_trending_post(self):
-        """Create a new post based on trending content"""
+        """Create an engaging post based on trending content with improved analysis"""
         try:
-            # Get top trending posts
+            # Randomly select posting strategy based on 3:5:2 ratio
+            strategy = random.choices(
+                ['previous_engagement', 'internet_trends', 'platform_trends'],
+                weights=[3, 5, 2]
+            )[0]
+
+            if strategy == 'previous_engagement':
+                return await self._create_engagement_based_post()
+            elif strategy == 'internet_trends':
+                return await self._create_internet_trends_post()
+            else:
+                return await self._create_platform_trends_post()
+
+        except Exception as e:
+            print(f"Error creating trending post: {str(e)}")
+            return None
+
+    async def _create_engagement_based_post(self):
+        """Create post based on previous high-engagement content"""
+        try:
+            # Get our recent posts with engagement metrics
+            recent_posts = self.client.account_statuses(self.client.me())
+            if not recent_posts:
+                return await self._create_platform_trends_post()
+
+            # Find most engaged post
+            top_post = max(recent_posts, 
+                key=lambda x: (x.get('favourites_count', 0) + x.get('reblogs_count', 0) * 1.5))
+
+            prompt = f"""
+            Based on this highly engaging post:
+            {top_post['content']}
+            
+            Create a new post that:
+            1. Builds upon the successful elements of the previous post
+            2. Adds fresh perspective while maintaining similar tone
+            3. Encourages even more community engagement
+            4. Uses relevant emojis thoughtfully
+            5. Keeps optimal length (180-240 characters)
+            """
+
+            response = await self.generate_entertainment_response(prompt)
+            
+            await self._handle_rate_limit()
+            status = self.client.status_post(
+                response,
+                visibility="public",
+                language=top_post.get('language', 'en'),
+                sensitive=top_post.get('sensitive', False)
+            )
+            
+            return self._format_post(status)
+
+        except Exception as e:
+            print(f"Error in engagement-based post: {str(e)}")
+            return None
+
+    async def _create_internet_trends_post(self):
+        """Create post based on current internet trends using Gemini"""
+        try:
+            # Ask Gemini about current trending topics
+            prompt = """What are the top 3 trending topics on the internet right now? 
+            Provide brief context for each trend. Format as: Topic: Context"""
+            
+            response = await self.chat.send_message(prompt)
+            trends = response.text
+
+            # Create post about one of the trends
+            post_prompt = f"""
+            Based on these current internet trends:
+            {trends}
+            
+            Create an engaging social media post that:
+            1. Discusses one of these trending topics
+            2. Provides unique insights or perspective
+            3. Uses relevant hashtags and emojis
+            4. Encourages discussion
+            5. Maintains optimal length (180-240 characters)
+            """
+
+            post_content = await self.generate_entertainment_response(post_prompt)
+            
+            await self._handle_rate_limit()
+            status = self.client.status_post(
+                post_content,
+                visibility="public"
+            )
+            
+            return self._format_post(status)
+
+        except Exception as e:
+            print(f"Error in internet trends post: {str(e)}")
+            return None
+
+    async def _create_platform_trends_post(self):
+        """Create post based on platform-specific trends"""
+        try:
             trending_posts = await self.get_trending_posts(limit=5)
             if not trending_posts:
-                return
+                return None
             
-            # Combine trending topics
-            trending_content = "\n".join([
-                f"- {post['content'][:100]}..." 
-                for post in trending_posts
-            ])
+            # Enhanced topic extraction
+            top_topic = max(trending_posts, 
+                key=lambda x: (x.get('favourites_count', 0) + 
+                             x.get('reblogs_count', 0) * 1.5 + 
+                             x.get('replies_count', 0) * 2))
             
-            # Generate summary post
             prompt = f"""
-            Based on these trending topics on Mastodon:
-            {trending_content}
+            Based on this trending Mastodon topic:
+            {top_topic['content']}
             
             Create an engaging post that:
-            1. Summarizes a key trending topic
-            2. Adds valuable insight or perspective
-            3. Includes relevant hashtags
-            4. Uses 1-2 appropriate emojis
-            5. Stays under 240 characters
-            
-            Format: Just the post text with hashtags and emojis.
+            1. Offers unique insights
+            2. Encourages thoughtful discussion
+            3. Uses these hashtags: {' '.join(['#' + tag for tag in top_topic.get('tags', [])])}
+            4. Includes relevant emojis
+            5. Maintains optimal length (180-240 characters)
             """
             
             response = await self.generate_entertainment_response(prompt)
             
-            # Post the content
             await self._handle_rate_limit()
             status = self.client.status_post(
                 response,
-                visibility="public"
+                visibility="public",
+                language=top_topic.get('language', 'en'),
+                sensitive=top_topic.get('sensitive', False)
             )
             
-            print(f"Auto-posted new content: {response}")
             return self._format_post(status)
             
         except Exception as e:
-            print(f"Error creating trending post: {str(e)}")
+            print(f"Error in platform trends post: {str(e)}")
             return None
 
     async def schedule_auto_posts(self):
