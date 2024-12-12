@@ -132,6 +132,7 @@ async def start_agent(config: PlatformConfig):
             
             try:
                 platform = MastodonPlatform(credentials)
+                platform.processor = processor  # Set processor reference
                 platform.dm_settings = config.dm_settings.dict()
                 platform.like_settings = config.like_settings.dict()
                 platform.auto_post_settings = config.auto_post_settings.dict()
@@ -194,12 +195,8 @@ async def stop_agent():
 @app.get("/api/status")
 async def get_status():
     try:
-        return {
-            "status": "running" if processor.is_running else "stopped",
-            "posts_processed": processor.posts_processed,
-            "responses_sent": processor.responses_sent,
-            "logs": processor.logs[-10:]  # Return last 10 logs
-        }
+        status = processor.get_status()
+        return status
     except Exception as e:
         print(f"Error in status check: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))

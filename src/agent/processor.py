@@ -8,15 +8,36 @@ class PostProcessor:
         self.platform = None
         self.config = None
         self.logs = []
+        self.sent_logs = set()  # Track logs that have been sent to UI
         self.posts_processed = 0
         self.responses_sent = 0
         self.processed_posts = set()
         self.processed_mentions = set()
 
+    def stop(self):
+        """Stop the processor and all platform services"""
+        try:
+            self.is_running = False
+            if self.platform:
+                # Update service status
+                self.platform.services_status = {
+                    'auto_post': False,
+                    'dm': False,
+                    'auto_like': False,
+                    'hashtag': False
+                }
+            self.log_info("Agent stopped successfully")
+        except Exception as e:
+            self.log_error(f"Error stopping agent: {str(e)}")
+            raise
+
     def update_config(self, config):
         """Update configuration and platform settings"""
         self.config = config
         if self.platform:
+            # Set processor reference
+            self.platform.processor = self
+            
             # Update platform settings
             self.platform.update_settings('hashtags', config.monitoring.hashtags)
             self.platform.update_settings('auto_post', {
@@ -64,12 +85,22 @@ class PostProcessor:
             }
             
         platform_status = self.platform.get_service_status()
+        
+        # Get only new logs that haven't been sent to UI
+        new_logs = []
+        for log in self.logs:
+            log_key = f"{log['timestamp']}:{log['message']}"
+            if log_key not in self.sent_logs:
+                new_logs.append(log)
+                self.sent_logs.add(log_key)
+        
         return {
             "status": "running" if self.is_running else "stopped",
             "posts_processed": self.posts_processed,
             "responses_sent": self.responses_sent,
             "services": platform_status['services'],
-            "settings": platform_status['settings']
+            "settings": platform_status['settings'],
+            "logs": new_logs  # Send only new logs
         }
 
     def log_info(self, message):

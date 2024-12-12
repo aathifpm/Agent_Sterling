@@ -835,34 +835,65 @@ class MastodonPlatform:
                 tasks.append(asyncio.create_task(self.schedule_auto_posts()))
                 self.services_status['auto_post'] = True
                 print("📝 Auto-posting service enabled")
+                self.log_info("Auto-posting service enabled")
             
             # DM service
             if self.dm_settings['enabled']:
                 tasks.append(asyncio.create_task(self.handle_dm_service()))
                 self.services_status['dm'] = True
                 print("📨 DM service enabled")
+                self.log_info("DM service enabled")
             
             # Auto-like service
             if self.like_settings['enabled']:
                 tasks.append(asyncio.create_task(self.handle_auto_likes()))
                 self.services_status['auto_like'] = True
                 print("❤️ Auto-like service enabled")
+                self.log_info("Auto-like service enabled")
             
             # Hashtag monitoring
             if self.hashtags:
                 tasks.append(asyncio.create_task(self.monitor_hashtags()))
                 self.services_status['hashtag'] = True
                 print("🔍 Hashtag monitoring enabled")
+                self.log_info("Hashtag monitoring enabled")
             
             # Wait for all tasks
             if tasks:
                 await asyncio.gather(*tasks)
             else:
                 print("⚠️ No services enabled")
+                self.log_info("No services enabled")
             
         except Exception as e:
-            print(f"❌ Error in services: {str(e)}")
+            error_msg = f"Error in services: {str(e)}"
+            print(f"❌ {error_msg}")
+            self.log_error(error_msg)
             raise
+
+    def log_info(self, message):
+        """Add info log entry"""
+        timestamp = datetime.now().isoformat()
+        log_entry = {
+            "timestamp": timestamp,
+            "type": "info",
+            "message": message
+        }
+        if hasattr(self, 'processor') and self.processor:
+            self.processor.logs.append(log_entry)
+        print(f"ℹ️ {message}")
+
+    def log_error(self, message):
+        """Add error log entry"""
+        timestamp = datetime.now().isoformat()
+        log_entry = {
+            "timestamp": timestamp,
+            "type": "error",
+            "message": message
+        }
+        if hasattr(self, 'processor') and self.processor:
+            self.processor.logs.append(log_entry)
+        print(f"❌ {message}")
 
     async def handle_dm_service(self):
         """Handle DM monitoring and responses"""
