@@ -20,12 +20,6 @@
 
     class AgentController {
         constructor() {
-            // Get backend URL based on environment
-            const currentDomain = window.location.hostname;
-            this.baseUrl = currentDomain.includes('onrender.com')
-                ? `https://${currentDomain.replace('agent-sterling-frontend', 'agent-sterling-backend')}/api`
-                : 'http://localhost:8000/api';
-
             this.config = {
                 platform: 'mastodon',
                 credentials: {
@@ -87,6 +81,7 @@
                 responsesSent: 0
             };
             
+            this.baseUrl = 'http://localhost:8000/api';
             this.initializeEventListeners();
             this.loadConfiguration();
             this.updateMetricsDisplay();
