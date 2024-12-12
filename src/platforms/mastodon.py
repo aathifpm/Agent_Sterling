@@ -112,6 +112,12 @@ class MastodonPlatform:
         # Initialize last auto post time
         self.last_auto_post_time = time.time()
         self.auto_post_interval = self.auto_post_settings['interval']
+        
+        self.processed_trending_topics = {}  # Track processed topics and their last content
+        self.topic_cooldown = 3600  # 1 hour cooldown for same topic
+        self.max_topic_history = 10  # Keep track of last 10 contents per topic
+        self.last_trending_check = 0
+        self.trending_check_interval = 300  # 5 minutes
 
     def _clean_html(self, text: str) -> str:
         """Remove HTML tags and clean up text"""
@@ -1068,3 +1074,170 @@ class MastodonPlatform:
                 'post_style': self.post_config
             }
         }
+
+    async def create_trending_content(self, topic: str, context: Dict = None) -> str:
+        """Generate unique content for a trending topic"""
+        try:
+            base_prompt = f"""Create a unique and engaging post about the trending topic: #{topic}
+            
+            Context from previous posts about this topic:
+            {self._get_topic_context(topic)}
+            
+            Additional context (if any):
+            {context if context else 'No additional context'}
+            
+            Rules:
+            1. Must be different from previous posts
+            2. Include relevant hashtags
+            3. Be engaging and informative
+            4. Include 1-2 relevant emojis
+            5. Maximum 2-3 sentences
+            6. Add a unique perspective or angle
+            7. If possible, relate to current events
+            8. Use conversational tone
+            """
+            
+            response = await self.generate_entertainment_response(base_prompt)
+            
+            # Store this content in topic history
+            self._update_topic_history(topic, response)
+            
+            return response
+            
+        except Exception as e:
+            print(f"Error generating trending content: {str(e)}")
+            return None
+
+    def _get_topic_context(self, topic: str) -> str:
+        """Get context of previous posts about this topic"""
+        if topic not in self.processed_trending_topics:
+            return "No previous posts about this topic"
+            
+        previous_contents = self.processed_trending_topics[topic]['contents']
+        if not previous_contents:
+            return "No previous posts about this topic"
+            
+        return "Previous posts:\n" + "\n".join(
+            f"- {content[:100]}..." for content in previous_contents[-3:]
+        )
+
+    def _update_topic_history(self, topic: str, content: str):
+        """Update the history of content for a topic"""
+        current_time = time.time()
+        
+        if topic not in self.processed_trending_topics:
+            self.processed_trending_topics[topic] = {
+                'last_used': current_time,
+                'contents': [content]
+            }
+        else:
+            self.processed_trending_topics[topic]['last_used'] = current_time
+            self.processed_trending_topics[topic]['contents'].append(content)
+            
+            # Keep only the last N contents
+            if len(self.processed_trending_topics[topic]['contents']) > self.max_topic_history:
+                self.processed_trending_topics[topic]['contents'] = \
+                    self.processed_trending_topics[topic]['contents'][-self.max_topic_history:]
+
+    def _cleanup_old_topics(self):
+        """Remove old topics from tracking"""
+        current_time = time.time()
+        topics_to_remove = []
+        
+        for topic, data in self.processed_trending_topics.items():
+            if current_time - data['last_used'] > 86400:  # Remove after 24 hours
+                topics_to_remove.append(topic)
+                
+        for topic in topics_to_remove:
+            del self.processed_trending_topics[topic]
+
+    async def get_trending_topics_with_context(self) -> List[Dict]:
+        """Get trending topics with additional context"""
+        try:
+            current_time = time.time()
+            
+            # Check if we should update trending topics
+            if current_time - self.last_trending_check < self.trending_check_interval:
+                return []
+                
+            self.last_trending_check = current_time
+            
+            # Get trending tags
+            trending = self.client.trending_tags()
+            
+            # Get context for each trending topic
+            enriched_topics = []
+            for tag in trending[:5]:  # Use top 5 trending tags
+                # Skip if topic is in cooldown
+                if tag['name'] in self.processed_trending_topics:
+                    last_used = self.processed_trending_topics[tag['name']]['last_used']
+                    if current_time - last_used < self.topic_cooldown:
+                        continue
+                
+                # Get recent posts for context
+                recent_posts = await self.search_hashtag(tag['name'], limit=3)
+                
+                # Extract key information from recent posts
+                context = {
+                    'recent_discussions': [post['content'] for post in recent_posts],
+                    'engagement_level': sum(
+                        post.get('favourites_count', 0) + post.get('reblogs_count', 0) 
+                        for post in recent_posts
+                    ),
+                    'active_hours': len(set(
+                        datetime.fromisoformat(post['created_at']).hour 
+                        for post in recent_posts
+                    ))
+                }
+                
+                enriched_topics.append({
+                    'tag': tag['name'],
+                    'context': context
+                })
+            
+            # Cleanup old topics periodically
+            self._cleanup_old_topics()
+            
+            return enriched_topics
+            
+        except Exception as e:
+            print(f"Error getting trending topics: {str(e)}")
+            return []
+
+    async def create_trending_post_improved(self) -> Dict:
+        """Create an improved trending post with context awareness"""
+        try:
+            # Get trending topics with context
+            topics = await self.get_trending_topics_with_context()
+            if not topics:
+                return {"error": "No suitable trending topics found"}
+            
+            # Sort topics by engagement level
+            topics.sort(key=lambda x: x['context']['engagement_level'], reverse=True)
+            
+            for topic in topics:
+                try:
+                    # Generate unique content for this topic
+                    content = await self.create_trending_content(
+                        topic['tag'],
+                        topic['context']
+                    )
+                    
+                    if content:
+                        # Post the content
+                        post = self.client.status_post(
+                            content,
+                            visibility="public"
+                        )
+                        
+                        return self._format_post(post)
+                        
+                except Exception as e:
+                    print(f"Error creating post for topic {topic['tag']}: {str(e)}")
+                    continue
+            
+            return {"error": "Failed to create trending post"}
+            
+        except Exception as e:
+            print(f"Error in improved trending post creation: {str(e)}")
+            return {"error": str(e)}
