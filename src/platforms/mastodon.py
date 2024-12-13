@@ -112,6 +112,9 @@ class MastodonPlatform:
         # Initialize last auto post time
         self.last_auto_post_time = time.time()
         self.auto_post_interval = self.auto_post_settings['interval']
+        
+        self.platform_trends_used_today = False
+        self.last_platform_trends_reset = time.time()
 
     def _clean_html(self, text: str) -> str:
         """Remove HTML tags and clean up text"""
@@ -419,10 +422,25 @@ class MastodonPlatform:
     async def create_trending_post(self):
         """Create an engaging post based on trending content with improved analysis"""
         try:
-            # Randomly select posting strategy based on 3:5:2 ratio
+            # Reset platform trends flag at midnight
+            current_time = time.time()
+            current_day = time.strftime("%Y-%m-%d", time.localtime(current_time))
+            last_reset_day = time.strftime("%Y-%m-%d", time.localtime(self.last_platform_trends_reset))
+            
+            if current_day != last_reset_day:
+                self.platform_trends_used_today = False
+                self.last_platform_trends_reset = current_time
+
+            # Adjust weights based on platform trends usage
+            if self.platform_trends_used_today:
+                weights = [3, 7, 0]  # Disable platform trends if already used today
+            else:
+                weights = [3, 5, 2]  # Original weights
+
+            # Randomly select posting strategy based on adjusted weights
             strategy = random.choices(
                 ['previous_engagement', 'internet_trends', 'platform_trends'],
-                weights=[3, 5, 2]
+                weights=weights
             )[0]
 
             if strategy == 'previous_engagement':
@@ -430,6 +448,7 @@ class MastodonPlatform:
             elif strategy == 'internet_trends':
                 return await self._create_internet_trends_post()
             else:
+                self.platform_trends_used_today = True
                 return await self._create_platform_trends_post()
 
         except Exception as e:
