@@ -115,6 +115,12 @@ class MastodonPlatform:
         
         self.platform_trends_used_today = False
         self.last_platform_trends_reset = time.time()
+        self.trends_tracking_file = "platform_trends_tracking.json"
+        self._load_trends_tracking()
+        
+        self.last_posts_cache = []
+        self.last_posts_file = "last_posts_cache.json"
+        self._load_last_posts()
 
     def _clean_html(self, text: str) -> str:
         """Remove HTML tags and clean up text"""
@@ -428,14 +434,18 @@ class MastodonPlatform:
             last_reset_day = time.strftime("%Y-%m-%d", time.localtime(self.last_platform_trends_reset))
             
             if current_day != last_reset_day:
+                print("Resetting platform trends tracking for new day")
                 self.platform_trends_used_today = False
                 self.last_platform_trends_reset = current_time
+                self._save_trends_tracking()
 
             # Adjust weights based on platform trends usage
             if self.platform_trends_used_today:
-                weights = [3, 7, 0]  # Disable platform trends if already used today
+                print("Platform trends already used today, adjusting weights")
+                weights = [4, 6, 0]  # Increased weight for internet trends when platform trends disabled
             else:
-                weights = [3, 5, 2]  # Original weights
+                print("Platform trends available, using normal weights")
+                weights = [3, 5, 2]
 
             # Randomly select posting strategy based on adjusted weights
             strategy = random.choices(
@@ -443,12 +453,16 @@ class MastodonPlatform:
                 weights=weights
             )[0]
 
+            print(f"Selected strategy: {strategy}")
+
             if strategy == 'previous_engagement':
                 return await self._create_engagement_based_post()
             elif strategy == 'internet_trends':
                 return await self._create_internet_trends_post()
             else:
+                print("Using platform trends - marking as used for today")
                 self.platform_trends_used_today = True
+                self._save_trends_tracking()
                 return await self._create_platform_trends_post()
 
         except Exception as e:
@@ -535,39 +549,46 @@ class MastodonPlatform:
     async def _create_platform_trends_post(self):
         """Create post based on platform-specific trends"""
         try:
-            trending_posts = await self.get_trending_posts(limit=5)
+            trending_posts = await self.get_trending_posts(limit=10)
             if not trending_posts:
                 return None
             
-            # Enhanced topic extraction
-            top_topic = max(trending_posts, 
-                key=lambda x: (x.get('favourites_count', 0) + 
-                             x.get('reblogs_count', 0) * 1.5 + 
-                             x.get('replies_count', 0) * 2))
+            # Try each trending post until finding one that's not too similar to recent posts
+            for trending_post in trending_posts:
+                prompt = f"""
+                Based on this trending Mastodon topic:
+                {trending_post['content']}
+                
+                Create an engaging post that:
+                1. Offers unique insights
+                2. Encourages thoughtful discussion
+                3. Uses relevant hashtags
+                4. Includes appropriate emojis
+                5. Maintains optimal length (180-240 characters)
+                """
+                
+                response = await self.generate_entertainment_response(prompt)
+                
+                # Check if the generated content is too similar to recent posts
+                if not self._is_post_recent(response):
+                    # Add to cache before posting
+                    self.last_posts_cache.append(response)
+                    if len(self.last_posts_cache) > 5:
+                        self.last_posts_cache.pop(0)
+                    self._save_last_posts()
+                    
+                    await self._handle_rate_limit()
+                    status = self.client.status_post(
+                        response,
+                        visibility="public",
+                        language=trending_post.get('language', 'en'),
+                        sensitive=trending_post.get('sensitive', False)
+                    )
+                    
+                    return self._format_post(status)
             
-            prompt = f"""
-            Based on this trending Mastodon topic:
-            {top_topic['content']}
-            
-            Create an engaging post that:
-            1. Offers unique insights
-            2. Encourages thoughtful discussion
-            3. Uses these hashtags: {' '.join(['#' + tag for tag in top_topic.get('tags', [])])}
-            4. Includes relevant emojis
-            5. Maintains optimal length (180-240 characters)
-            """
-            
-            response = await self.generate_entertainment_response(prompt)
-            
-            await self._handle_rate_limit()
-            status = self.client.status_post(
-                response,
-                visibility="public",
-                language=top_topic.get('language', 'en'),
-                sensitive=top_topic.get('sensitive', False)
-            )
-            
-            return self._format_post(status)
+            # If all trending posts were too similar, fall back to internet trends
+            return await self._create_internet_trends_post()
             
         except Exception as e:
             print(f"Error in platform trends post: {str(e)}")
@@ -1187,3 +1208,65 @@ class MastodonPlatform:
                 'post_style': self.post_config
             }
         }
+
+    def _load_trends_tracking(self):
+        """Load platform trends tracking data"""
+        try:
+            if os.path.exists(self.trends_tracking_file):
+                with open(self.trends_tracking_file, 'r') as f:
+                    data = json.load(f)
+                    self.platform_trends_used_today = data.get('used_today', False)
+                    self.last_platform_trends_reset = data.get('last_reset', time.time())
+        except Exception as e:
+            print(f"Error loading trends tracking: {str(e)}")
+
+    def _save_trends_tracking(self):
+        """Save platform trends tracking data"""
+        try:
+            with open(self.trends_tracking_file, 'w') as f:
+                json.dump({
+                    'used_today': self.platform_trends_used_today,
+                    'last_reset': self.last_platform_trends_reset
+                }, f)
+        except Exception as e:
+            print(f"Error saving trends tracking: {str(e)}")
+
+    def _load_last_posts(self):
+        """Load last posts cache"""
+        try:
+            if os.path.exists(self.last_posts_file):
+                with open(self.last_posts_file, 'r') as f:
+                    self.last_posts_cache = json.load(f)
+                    # Keep only last 5 posts
+                    self.last_posts_cache = self.last_posts_cache[-5:]
+        except Exception as e:
+            print(f"Error loading last posts cache: {str(e)}")
+            self.last_posts_cache = []
+
+    def _save_last_posts(self):
+        """Save last posts cache"""
+        try:
+            with open(self.last_posts_file, 'w') as f:
+                json.dump(self.last_posts_cache, f)
+        except Exception as e:
+            print(f"Error saving last posts cache: {str(e)}")
+
+    def _is_post_recent(self, content):
+        """Check if similar content was posted recently"""
+        return any(self._calculate_similarity(content, past_post) > 0.7 for past_post in self.last_posts_cache)
+
+    def _calculate_similarity(self, text1, text2):
+        """Calculate similarity between two texts using word overlap"""
+        try:
+            # Convert to sets of words for comparison
+            words1 = set(text1.lower().split())
+            words2 = set(text2.lower().split())
+            
+            # Calculate Jaccard similarity
+            intersection = len(words1.intersection(words2))
+            union = len(words1.union(words2))
+            
+            return intersection / union if union > 0 else 0
+        except Exception as e:
+            print(f"Error calculating similarity: {str(e)}")
+            return 0
