@@ -85,7 +85,7 @@ except Exception as e:
 # Serve index.html for the root path
 @app.get("/")
 async def read_root():
-    return FileResponse('static/index.html')
+    return FileResponse('static/dashboard.html')
 
 # API health check endpoint
 @app.get("/api/health")

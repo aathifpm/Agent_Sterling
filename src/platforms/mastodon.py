@@ -997,7 +997,12 @@ class MastodonPlatform:
                 self.services_status['hashtag'] = True
                 print("🔍 Hashtag monitoring enabled")
                 self.log_info("Hashtag monitoring enabled")
-            
+            if self.get_mentions:
+                tasks.append(asyncio.create_task(self.get_mentions()))
+                self.services_status['mention'] = True
+                print("📣 Mention handling enabled")
+                self.log_info("Mention handling enabled")
+
             # Wait for all tasks
             if tasks:
                 await asyncio.gather(*tasks)
