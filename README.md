@@ -165,6 +165,7 @@ This project is licensed under the MIT License.
 ## 📧 Contact Information
 
 Project Lead: Aathif PM - [@AathifPM](https://twitter.com/AathifPM)
+Project Co-Lead Mohammed Salick -[@mohammedsalick](https://github.com/mohammedsalick)
 
 Repository: [https://github.com/aathif_pm/Agent_Sterling](https://github.com/aathif_pm/Agent_Sterling)
 
