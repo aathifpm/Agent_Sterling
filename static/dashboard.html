@@ -3,333 +3,515 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Agent Sterling - AI Social Media Assistant</title>
+    <title>Agent Sterling - Next-Gen AI Social Media Assistant</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.11.4/gsap.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.11.4/ScrollTrigger.min.js"></script>
     <style>
         :root {
-            /* Modern Color Palette */
-            --primary-color: #4F46E5;  /* Indigo */
-            --primary-hover: #4338CA;
-            --secondary-color: #0EA5E9;  /* Sky Blue */
-            --background-color: #F8FAFC;
-            --surface-color: #FFFFFF;
-            --border-color: #E2E8F0;
-            --text-primary: #1E293B;
-            --text-secondary: #64748B;
-            --success-color: #10B981;
-            --error-color: #EF4444;
-            --warning-color: #F59E0B;
-            
-            /* Shadows */
-            --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
-            --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1);
-            --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1);
-        }
+    --primary-color: #6D28D9;
+    --secondary-color: #10B981;
+    --background-color: #0F172A;
+    --text-color: #F8FAFC;
+    --card-background: #1E293B;
+    --accent-color: #F59E0B;
+}
 
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
 
-        body {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            background-color: var(--background-color);
-            color: var(--text-primary);
-            line-height: 1.6;
-        }
+body {
+    font-family: 'Inter', sans-serif;
+    background-color: var(--background-color);
+    color: var(--text-color);
+    line-height: 1.6;
+}
 
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-            background: var(--surface-color);
-            padding: 2rem;
-            border-radius: 1rem;
-            box-shadow: var(--shadow-lg);
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            text-align: center;
-        }
+header {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 1000;
+    background-color: rgba(15, 23, 42, 0.8);
+    backdrop-filter: blur(10px);
+}
 
-        .logo {
-            font-size: 4rem;
-            margin-bottom: 2rem;
-        }
+nav {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 5%;
+}
 
-        h1 {
-            color: var(--primary-color);
-            margin-bottom: 1.5rem;
-            font-size: 2.5rem;
-            font-weight: 800;
-            letter-spacing: -0.025em;
-        }
+.logo {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--primary-color);
+}
 
-        .tagline {
-            max-width: 600px;
-            margin: 0 auto 2rem;
-            color: var(--text-secondary);
-            font-size: 1.2rem;
-        }
+nav ul {
+    display: flex;
+    list-style: none;
+}
 
-        .cta-button {
-            padding: 0.75rem 1.5rem;
-            border: 2px solid var(--primary-color);
-            border-radius: 9999px;
-            background: var(--primary-color);
-            color: white;
-            cursor: pointer;
-            transition: all 0.2s ease;
-            font-size: 0.875rem;
-            font-weight: 600;
-            text-decoration: none;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            min-width: 120px;
-        }
+nav ul li {
+    margin-left: 2rem;
+}
 
-        .cta-button:hover {
-            background: var(--primary-hover);
-            border-color: var(--primary-hover);
-        }
+nav ul li a {
+    color: var(--text-color);
+    text-decoration: none;
+    transition: color 0.3s ease;
+}
 
-        .features {
-            display: flex;
-            justify-content: center;
-            gap: 1.5rem;
-            margin-top: 3rem;
-            max-width: 800px;
-        }
+nav ul li a:hover {
+    color: var(--secondary-color);
+}
 
-        .feature {
-            background: var(--surface-color);
-            padding: 1.5rem;
-            border: 1px solid var(--border-color);
-            border-radius: 0.75rem;
-            transition: all 0.3s ease;
-            width: 250px;
-        }
+.hero {
+    height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    overflow: hidden;
+}
 
-        .feature:hover {
-            box-shadow: var(--shadow-md);
-            transform: translateY(-2px);
-        }
+.hero-content {
+    text-align: center;
+    z-index: 1;
+}
 
-        .feature-icon {
-            font-size: 2.5rem;
-            margin-bottom: 1rem;
-            color: var(--success-color);
-        }
+.hero h1 {
+    font-size: 4rem;
+    font-weight: 800;
+    margin-bottom: 1rem;
+    position: relative;
+}
 
-        .feature h3 {
-            color: var(--primary-color);
-            margin-bottom: 0.5rem;
-            font-size: 1.25rem;
-            font-weight: 700;
-        }
+.glitch {
+    position: relative;
+    color: var(--primary-color);
+}
 
-        .feature p {
-            color: var(--text-secondary);
-            font-size: 0.875rem;
-        }
+.glitch::before,
+.glitch::after {
+    content: attr(data-text);
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+}
 
-        /* Influencer Plans Styles */
-        .influencer-plans {
-            display: flex;
-            justify-content: center;
-            gap: 1.5rem;
-            margin-top: 3rem;
-            max-width: 1000px;
-        }
+.glitch::before {
+    left: 2px;
+    text-shadow: -2px 0 var(--secondary-color);
+    clip: rect(24px, 550px, 90px, 0);
+    animation: glitch-anim-2 3s infinite linear alternate-reverse;
+}
 
-        .plan {
-            background: var(--surface-color);
-            border: 1px solid var(--border-color);
-            border-radius: 0.75rem;
-            padding: 2rem;
-            width: 300px;
-            text-align: center;
-            transition: all 0.3s ease;
-            position: relative;
-            overflow: hidden;
-        }
+.glitch::after {
+    left: -2px;
+    text-shadow: -2px 0 var(--accent-color);
+    clip: rect(85px, 550px, 140px, 0);
+    animation: glitch-anim 2.5s infinite linear alternate-reverse;
+}
 
-        .plan:hover {
-            box-shadow: var(--shadow-lg);
-            transform: translateY(-5px);
-        }
+@keyframes glitch-anim {
+    0% {
+        clip: rect(17px, 9999px, 44px, 0);
+    }
+    20% {
+        clip: rect(9px, 9999px, 89px, 0);
+    }
+    40% {
+        clip: rect(134px, 9999px, 5px, 0);
+    }
+    60% {
+        clip: rect(78px, 9999px, 3px, 0);
+    }
+    80% {
+        clip: rect(146px, 9999px, 33px, 0);
+    }
+    100% {
+        clip: rect(53px, 9999px, 98px, 0);
+    }
+}
 
-        .plan-badge {
-            position: absolute;
-            top: 1rem;
-            right: 1rem;
-            background: var(--primary-color);
-            color: white;
-            padding: 0.25rem 0.5rem;
-            border-radius: 9999px;
-            font-size: 0.75rem;
-            font-weight: 600;
-        }
+@keyframes glitch-anim-2 {
+    0% {
+        clip: rect(129px, 9999px, 36px, 0);
+    }
+    20% {
+        clip: rect(36px, 9999px, 4px, 0);
+    }
+    40% {
+        clip: rect(104px, 9999px, 92px, 0);
+    }
+    60% {
+        clip: rect(82px, 9999px, 39px, 0);
+    }
+    80% {
+        clip: rect(124px, 9999px, 34px, 0);
+    }
+    100% {
+        clip: rect(61px, 9999px, 26px, 0);
+    }
+}
 
-        .plan h2 {
-            color: var(--primary-color);
-            margin-bottom: 1rem;
-            font-size: 1.5rem;
-            font-weight: 700;
-        }
+.tagline {
+    font-size: 1.5rem;
+    margin-bottom: 2rem;
+    opacity: 0.9;
+}
 
-        .plan-price {
-            font-size: 2rem;
-            font-weight: 800;
-            color: var(--success-color);
-            margin-bottom: 1rem;
-        }
+.cta-button {
+    display: inline-block;
+    padding: 1rem 2rem;
+    background-color: var(--secondary-color);
+    color: var(--background-color);
+    text-decoration: none;
+    border-radius: 50px;
+    font-weight: 600;
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
 
-        .plan-features {
-            list-style-type: none;
-            margin-bottom: 1.5rem;
-        }
+.cta-button:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 10px 20px rgba(16, 185, 129, 0.2);
+}
 
-        .plan-features li {
-            margin-bottom: 0.75rem;
-            color: var(--text-secondary);
-            font-size: 0.875rem;
-        }
+.hero-background {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 0;
+}
 
-        .plan-button {
-            width: 100%;
-            background: var(--surface-color);
-            border: 2px solid var(--primary-color);
-            color: var(--primary-color);
-        }
+.circle, .square, .triangle {
+    position: absolute;
+    opacity: 0.1;
+}
 
-        .plan-button:hover {
-            background: var(--primary-color);
-            color: white;
-        }
+.circle {
+    width: 300px;
+    height: 300px;
+    border-radius: 50%;
+    background-color: var(--primary-color);
+    top: 20%;
+    left: 10%;
+}
 
-        .plan-recommended {
-            border-color: var(--success-color);
-            transform: scale(1.05);
-        }
+.square {
+    width: 200px;
+    height: 200px;
+    background-color: var(--secondary-color);
+    bottom: 15%;
+    right: 15%;
+    transform: rotate(45deg);
+}
 
-        .plan-recommended .plan-badge {
-            background: var(--success-color);
-        }
+.triangle {
+    width: 0;
+    height: 0;
+    border-left: 150px solid transparent;
+    border-right: 150px solid transparent;
+    border-bottom: 250px solid var(--accent-color);
+    top: 40%;
+    right: 5%;
+}
 
-        /* Dark Mode */
-        @media (prefers-color-scheme: dark) {
-            :root {
-                --background-color: #0F172A;
-                --surface-color: #1E293B;
-                --border-color: #334155;
-                --text-primary: #F8FAFC;
-                --text-secondary: #94A3B8;
-            }
+.features, .pricing, .contact {
+    padding: 5rem 10%;
+}
 
-            .plan-button {
-                background: var(--surface-color);
-                color: white;
-                border-color: white;
-            }
+h2 {
+    font-size: 2.5rem;
+    margin-bottom: 2rem;
+    text-align: center;
+}
 
-            .plan-button:hover {
-                background: white;
-                color: var(--text-primary);
-            }
-        }
+.feature-grid, .pricing-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 2rem;
+}
 
-        /* Responsive Design */
-        @media (max-width: 768px) {
-            .container {
-                padding: 1rem;
-            }
+.feature-card, .pricing-card {
+    background-color: var(--card-background);
+    padding: 2rem;
+    border-radius: 10px;
+    text-align: center;
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
 
-            .features, .influencer-plans {
-                flex-direction: column;
-                align-items: center;
-            }
+.feature-card:hover, .pricing-card:hover {
+    transform: translateY(-10px);
+    box-shadow: 0 20px 30px rgba(0, 0, 0, 0.2);
+}
 
-            .feature, .plan {
-                width: 100%;
-                max-width: 350px;
-            }
-        }
+.feature-icon {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+}
+
+.pricing-card {
+    position: relative;
+    overflow: hidden;
+}
+
+.featured {
+    border: 2px solid var(--accent-color);
+}
+
+.featured-badge {
+    position: absolute;
+    top: 1rem;
+    right: -2rem;
+    background-color: var(--accent-color);
+    color: var(--background-color);
+    padding: 0.5rem 3rem;
+    transform: rotate(45deg);
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+
+.price {
+    font-size: 2.5rem;
+    font-weight: 700;
+    margin: 1rem 0;
+    color: var(--secondary-color);
+}
+
+.pricing-card ul {
+    list-style: none;
+    margin-bottom: 2rem;
+}
+
+.pricing-card li {
+    margin-bottom: 0.5rem;
+}
+
+.plan-button {
+    display: inline-block;
+    padding: 0.75rem 1.5rem;
+    background-color: var(--primary-color);
+    color: var(--text-color);
+    text-decoration: none;
+    border-radius: 5px;
+    transition: background-color 0.3s ease;
+}
+
+.plan-button:hover {
+    background-color: var(--secondary-color);
+}
+
+.contact form {
+    display: flex;
+    flex-direction: column;
+    max-width: 500px;
+    margin: 0 auto;
+}
+
+.contact input,
+.contact textarea {
+    margin-bottom: 1rem;
+    padding: 0.75rem;
+    border-radius: 5px;
+    border: none;
+    background-color: var(--card-background);
+    color: var(--text-color);
+}
+
+.submit-button {
+    padding: 0.75rem 1.5rem;
+    background-color: var(--secondary-color);
+    color: var(--background-color);
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+}
+
+.submit-button:hover {
+    background-color: var(--primary-color);
+}
+
+footer {
+    text-align: center;
+    padding: 2rem;
+    background-color: var(--card-background);
+}
+
+@media (max-width: 768px) {
+    .hero h1 {
+        font-size: 3rem;
+    }
+
+    .tagline {
+        font-size: 1.2rem;
+    }
+
+    .feature-grid, .pricing-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .circle, .square, .triangle {
+        display: none;
+    }
+}
+
+@keyframes float {
+    0% {
+        transform: translateY(0px);
+    }
+    50% {
+        transform: translateY(-20px);
+    }
+    100% {
+        transform: translateY(0px);
+    }
+}
+
+.feature-icon {
+    animation: float 6s ease-in-out infinite;
+}
+
+.pricing-card:nth-child(1) {
+    animation: float 6s ease-in-out infinite;
+}
+
+.pricing-card:nth-child(2) {
+    animation: float 6s ease-in-out infinite 0.2s;
+}
+
+.pricing-card:nth-child(3) {
+    animation: float 6s ease-in-out infinite 0.4s;
+}
+
+
     </style>
 </head>
 <body>
-    <div class="container">
-        <div class="logo">🤖</div>
-        <h1>Agent Sterling</h1>
-        <p class="tagline">AI-Powered Social Media Management System: Automate, Engage, and Optimize Your Social Presence</p>
-        
-        <a href="index.html" class="cta-button">Get Started</a>
+    <header>
+        <nav>
+            <div class="logo">Agent Sterling</div>
+            <ul>
+                <li><a href="#features">Features</a></li>
+                <li><a href="#pricing">Pricing</a></li>
+                <li><a href="#contact">Contact</a></li>
+            </ul>
+        </nav>
+    </header>
 
-        <div class="features">
-            <div class="feature">
-                <div class="feature-icon">🚀</div>
-                <h3>Automated Posting</h3>
-                <p>Schedule and publish content across multiple platforms effortlessly.</p>
+    <main>
+        <section id="hero" class="hero">
+            <div class="hero-content">
+                <h1 class="glitch" data-text="Agent Sterling">Agent Sterling</h1>
+                <p class="tagline">Revolutionize Your Social Media Presence with AI-Powered Precision</p>
+                <a href="index.html" class="cta-button">Experience the Future</a>
             </div>
-            <div class="feature">
-                <div class="feature-icon">💬</div>
-                <h3>Smart Interactions</h3>
-                <p>AI-powered comment replies and engagement tracking.</p>
+            <div class="hero-background">
+                <div class="circle"></div>
+                <div class="square"></div>
+                <div class="triangle"></div>
             </div>
-            <div class="feature">
-                <div class="feature-icon">📊</div>
-                <h3>Advanced Analytics</h3>
-                <p>Gain insights into your social media performance.</p>
-            </div>
-        </div>
+        </section>
 
-        <div class="influencer-plans">
-            <div class="plan">
-                <div class="plan-badge">Basic</div>
-                <h2>Basic Plan</h2>
-                <div class="plan-price">₹5,000/mo</div>
-                <ul class="plan-features">
-                    <li>Auto-posting across platforms</li>
-                    <li>Basic comment replies</li>
-                    <li>Standard performance analytics</li>
-                    <li>Mastodon platform integration</li>
-                    <li>Limited hashtag optimization</li>
-                </ul>
-                <a href="#" class="cta-button plan-button">Choose Basic</a>
+        <section id="features" class="features">
+            <h2>Key Features</h2>
+            <div class="feature-grid">
+                <div class="feature-card">
+                    <div class="feature-icon">🤖</div>
+                    <h3>AI-Driven Content Creation</h3>
+                    <p>Generate engaging posts tailored to your brand voice and audience preferences.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🔮</div>
+                    <h3>Predictive Analytics</h3>
+                    <p>Forecast trends and optimize your content strategy with machine learning insights.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🌐</div>
+                    <h3>Cross-Platform Synergy</h3>
+                    <p>Seamlessly manage and synchronize your presence across all major social networks.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🎭</div>
+                    <h3>Persona-Based Engagement</h3>
+                    <p>Interact with your audience using AI-generated personas tailored to each platform.</p>
+                </div>
             </div>
-            <div class="plan plan-recommended">
-                <div class="plan-badge">Recommended</div>
-                <h2>Pro Plan</h2>
-                <div class="plan-price">₹15,000/mo</div>
-                <ul class="plan-features">
-                    <li>Instagram story management</li>
-                    <li>Advanced comment interaction</li>
-                    <li>Optimized hashtag usage</li>
-                    <li>Detailed performance analytics</li>
-                    <li>AI-powered content suggestions</li>
-                    <li>Instagram & Mastodon integration</li>
-                </ul>
-                <a href="#" class="cta-button plan-button">Choose Pro</a>
+        </section>
+
+        <section id="pricing" class="pricing">
+            <h2>Choose Your Plan</h2>
+            <div class="pricing-grid">
+                <div class="pricing-card">
+                    <h3>Basic Plan</h3>
+                    <div class="price">$20/mo</div>
+                    <ul>
+                        <li>AI-powered content suggestions</li>
+                        <li>Basic sentiment analysis</li>
+                        <li>Automated posting on 3 platforms</li>
+                        <li>Weekly performance reports</li>
+                        <li>24/7 chatbot support</li>
+                    </ul>
+                    <a href="#" class="plan-button">Amplify Your Presence</a>
+                </div>
+                <div class="pricing-card featured">
+                    <div class="featured-badge">Most Popular</div>
+                    <h3>Pro Plan</h3>
+                    <div class="price">$60/mo</div>
+                    <ul>
+                        <li>Advanced AI content creation</li>
+                        <li>Real-time sentiment tracking</li>
+                        <li>Unlimited automated posting</li>
+                        <li>Predictive trend analysis</li>
+                        <li>Persona-based engagement tools</li>
+                        <li>Priority human support</li>
+                    </ul>
+                    <a href="#" class="plan-button">Dominate Your Niche</a>
+                </div>
+                <div class="pricing-card">
+                    <h3>Premium Plan</h3>
+                    <div class="price">$100/mo</div>
+                    <ul>
+                        <li>Custom AI model training</li>
+                        <li>Cross-platform synergy optimization</li>
+                        <li>Advanced competitor analysis</li>
+                        <li>Influencer collaboration tools</li>
+                        <li>Dedicated AI strategist</li>
+                        <li>24/7 premium support</li>
+                        <li>Quarterly strategy sessions</li>
+                    </ul>
+                    <a href="#" class="plan-button">Transform Your Brand</a>
+                </div>
             </div>
-            <div class="plan">
-                <div class="plan-badge">Premium</div>
-                <h2>Premium Plan</h2>
-                <div class="plan-price">₹30,000/mo</div>
-                <ul class="plan-features">
-                    <li>Full campaign management</li>
-                    <li>Deep engagement tools</li>
-                    <li>Influencer collaboration features</li>
-                    <li>Cross-platform analytics</li>
-                    <li>Priority customer support</li>
-                    <li>Custom AI content generation</li>
-                    <li>Full platform integration</li>
-                </ul>
-                <a href="#" class="cta-button plan-button">Choose Premium</a>
-            </div>
-        </div>
-    </div>
+        </section>
+
+        <section id="contact" class="contact">
+            <h2>Get in Touch</h2>
+            <form id="contact-form">
+                <input type="text" name="name" placeholder="Your Name" required>
+                <input type="email" name="email" placeholder="Your Email" required>
+                <textarea name="message" placeholder="Your Message" required></textarea>
+                <button type="submit" class="submit-button">Send Message</button>
+            </form>
+        </section>
+    </main>
+
+    <footer>
+        <p>&copy; 2023 Agent Sterling. All rights reserved.</p>
+    </footer>
+
 </body>
 </html>
